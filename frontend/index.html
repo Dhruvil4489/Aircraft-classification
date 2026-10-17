@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroDamage AI — Aircraft Damage Classification & BLIP Captioning</title>
+  <meta name="description" content="Automated aircraft structural damage classification using ImageNet-pretrained VGG16 and image captioning/summarization via HuggingFace BLIP.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header / Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">AeroDamage AI</span>
+          <span class="brand-subtitle">VGG16 Feature Extractor + BLIP Vision-Language</span>
+        </div>
+      </div>
+      <nav class="nav-links">
+        <button class="nav-btn active" data-section="section-overview" id="btn-nav-overview">Overview</button>
+        <button class="nav-btn" data-section="section-classify" id="btn-nav-classify">Classification</button>
+        <button class="nav-btn" data-section="section-caption" id="btn-nav-caption">Caption & Summary</button>
+        <button class="nav-btn" data-section="section-evaluation" id="btn-nav-evaluation">Evaluation & Curves</button>
+        <button class="nav-btn" data-section="section-dataset" id="btn-nav-dataset">Dataset & Leakage</button>
+        <button class="nav-btn" data-section="section-technical" id="btn-nav-technical">Technical & Limitations</button>
+      </nav>
+      <div class="system-status" id="system-status-indicator">
+        <span class="status-dot"></span>
+        <span class="status-text" id="system-status-text">Checking System...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+    
+    <!-- System Notification Banner -->
+    <div class="alert-banner" id="global-alert-banner" style="display: none;">
+      <div class="alert-icon" id="alert-icon">⚠️</div>
+      <div class="alert-message" id="alert-message">Notice</div>
+      <button class="alert-close" id="btn-close-alert">&times;</button>
+    </div>
+
+    <!-- 1. OVERVIEW SECTION -->
+    <section class="content-section active" id="section-overview">
+      <div class="hero-card">
+        <div class="hero-badge">Pretrained Deep Learning & Multimodal AI</div>
+        <h1 class="hero-title">Automated Aircraft Structural Damage Inspection</h1>
+        <p class="hero-desc">
+          Automate the classification of exterior aircraft surface damage into 
+          <strong>dent</strong> or <strong>crack</strong> categories using a frozen 
+          <strong>VGG16</strong> backbone with custom dense classification head, paired with 
+          <strong>HuggingFace BLIP</strong> for prompt-conditioned natural language damage descriptions.
+        </p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" id="btn-hero-classify">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            Analyze Damage Image
+          </button>
+          <button class="btn btn-secondary" id="btn-hero-evaluation">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 20V10M12 20V4M6 20v-6"/>
+            </svg>
+            View Real Metrics & Plots
+          </button>
+        </div>
+      </div>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="card-icon blue">🔍</div>
+          <h3>Module A: VGG16 Classifier</h3>
+          <p>
+            ImageNet-pretrained VGG16 feature extractor frozen at all convolutional layers. 
+            Custom dual-dense binary head (512-ReLU, Dropout 0.3, 512-ReLU, Dropout 0.3, Sigmoid). 
+            Outputs calibrated posterior probabilities P(dent) and P(crack).
+          </p>
+          <div class="card-meta">
+            <span>Input: 224&times;224 RGB</span>
+            <span>Rescale: 1./255</span>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="card-icon purple">📝</div>
+          <h3>Module B: BLIP Vision-Language</h3>
+          <p>
+            Conditional generation with <code>Salesforce/blip-image-captioning-base</code>. 
+            Generates natural descriptions ("This is a picture of") and detailed prompt-conditioned 
+            summaries ("This is a detailed photo showing"). Wrapped in custom Keras layer.
+          </p>
+          <div class="card-meta">
+            <span>PyTorch 2.2 CPU</span>
+            <span>Concurrency Lock: 1</span>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="card-icon amber">🛡️</div>
+          <h3>Safety & Academic Integrity</h3>
+          <p>
+            Strict academic replication of all 10 notebook tasks. All metrics, curves, and predictions 
+            are generated dynamically from real execution artifacts. Clear aviation safety disclaimers 
+            disclosed on every assessment.
+          </p>
+          <div class="card-meta">
+            <span>Seed: 42</span>
+            <span>Zero Mocking Policy</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. CLASSIFICATION SECTION -->
+    <section class="content-section" id="section-classify">
+      <div class="section-header">
+        <h2>Module A — Damage Classification (Dent vs Crack)</h2>
+        <p>Upload an aircraft inspection photograph or select a pre-verified test image to obtain real VGG16 model predictions.</p>
+      </div>
+
+      <div class="interactive-layout">
+        <!-- Input Panel -->
+        <div class="panel card">
+          <div class="panel-header">
+            <h3>Image Input</h3>
+            <span class="badge" id="model-status-badge">Model Ready</span>
+          </div>
+
+          <!-- Dropzone -->
+          <div class="dropzone" id="classify-dropzone">
+            <input type="file" id="classify-file-input" accept="image/jpeg,image/png,image/webp" style="display: none;">
+            <div class="dropzone-inner" id="dropzone-content">
+              <div class="dropzone-icon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <p class="dropzone-text">Drag and drop an aircraft damage image here, or <span class="highlight">browse</span></p>
+              <span class="dropzone-hint">Supports JPEG, PNG, WebP up to 10 MB</span>
+            </div>
+            <!-- Image Preview -->
+            <div class="preview-container" id="classify-preview-container" style="display: none;">
+              <img id="classify-preview-image" src="" alt="Damage Preview">
+              <button class="btn btn-sm btn-danger remove-preview-btn" id="btn-remove-classify-preview">&times; Remove</button>
+            </div>
+          </div>
+
+          <!-- Examples Selector -->
+          <div class="examples-picker">
+            <label class="picker-label">Or choose a real test image from the dataset:</label>
+            <div class="example-buttons" id="classify-example-buttons">
+              <button class="example-btn" data-type="dent" data-file="dent_example_1.jpg" id="btn-example-dent-1">Dent Test #1</button>
+              <button class="example-btn" data-type="dent" data-file="dent_example_2.jpg" id="btn-example-dent-2">Dent Test #2 (Task 9)</button>
+              <button class="example-btn" data-type="crack" data-file="crack_example_1.jpg" id="btn-example-crack-1">Crack Test #1</button>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn btn-primary btn-block" id="btn-run-classify" disabled>
+              <span class="spinner" id="classify-spinner" style="display: none;"></span>
+              <span id="classify-btn-text">Run VGG16 Classification</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Output Results Panel -->
+        <div class="panel card">
+          <div class="panel-header">
+            <h3>Prediction Results</h3>
+            <span class="sub-label">Threshold = 0.5</span>
+          </div>
+
+          <div class="results-body" id="classify-results-body">
+            <div class="empty-state" id="classify-empty-state">
+              <div class="empty-icon">📊</div>
+              <p>Upload an image and run classification to view real neural network probabilities.</p>
+            </div>
+
+            <div class="inference-result" id="classify-result-content" style="display: none;">
+              <div class="prediction-banner" id="prediction-banner">
+                <span class="prediction-label-title">Predicted Damage Type:</span>
+                <span class="prediction-label-value" id="res-predicted-class">—</span>
+              </div>
+
+              <!-- Probabilities -->
+              <div class="prob-group">
+                <div class="prob-row">
+                  <div class="prob-meta">
+                    <span class="prob-name">Dent (Class 1)</span>
+                    <span class="prob-val" id="res-prob-dent">0.0%</span>
+                  </div>
+                  <div class="progress-bar-bg">
+                    <div class="progress-bar-fill fill-blue" id="res-bar-dent" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <div class="prob-row">
+                  <div class="prob-meta">
+                    <span class="prob-name">Crack (Class 0)</span>
+                    <span class="prob-val" id="res-prob-crack">0.0%</span>
+                  </div>
+                  <div class="progress-bar-bg">
+                    <div class="progress-bar-fill fill-red" id="res-bar-crack" style="width: 0%;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Metadata & Class Mapping -->
+              <div class="meta-box">
+                <div class="meta-item">
+                  <span class="meta-k">Class Mapping:</span>
+                  <span class="meta-v"><code>crack: 0</code>, <code>dent: 1</code> (Sigmoid = P(dent))</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-k">Preprocessing:</span>
+                  <span class="meta-v">224&times;224 RGB, scaled 1./255</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-k">Model Architecture:</span>
+                  <span class="meta-v">ImageNet VGG16 (Frozen) + Dual Dense(512)</span>
+                </div>
+              </div>
+
+              <!-- Aviation Disclaimer -->
+              <div class="disclaimer-callout">
+                <strong>Aviation Safety Notice:</strong>
+                <span id="res-disclaimer">Model output for educational purposes only; not a certified aviation safety assessment.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. CAPTION & SUMMARY SECTION -->
+    <section class="content-section" id="section-caption">
+      <div class="section-header">
+        <h2>Module B — BLIP Vision-Language Captioning & Summarization</h2>
+        <p>Generate prompt-conditioned natural language descriptions using Salesforce's BLIP conditional generation model.</p>
+      </div>
+
+      <div class="interactive-layout">
+        <div class="panel card">
+          <div class="panel-header">
+            <h3>Image Input</h3>
+            <span class="badge" id="blip-status-badge">BLIP Ready</span>
+          </div>
+
+          <div class="dropzone" id="caption-dropzone">
+            <input type="file" id="caption-file-input" accept="image/jpeg,image/png,image/webp" style="display: none;">
+            <div class="dropzone-inner" id="caption-dropzone-content">
+              <div class="dropzone-icon">📷</div>
+              <p class="dropzone-text">Upload image for captioning / summarization</p>
+              <span class="dropzone-hint">Supports JPEG, PNG up to 10 MB</span>
+            </div>
+            <div class="preview-container" id="caption-preview-container" style="display: none;">
+              <img id="caption-preview-image" src="" alt="BLIP Image Preview">
+              <button class="btn btn-sm btn-danger remove-preview-btn" id="btn-remove-caption-preview">&times; Remove</button>
+            </div>
+          </div>
+
+          <!-- Examples Selector -->
+          <div class="examples-picker">
+            <label class="picker-label">Or choose an academic benchmark image:</label>
+            <div class="example-buttons" id="caption-example-buttons">
+              <button class="example-btn" data-file="task9_task10_image.jpg" id="btn-example-task9">Task 9/10 Image (149_22)</button>
+              <button class="example-btn" data-file="144_10_image.jpg" id="btn-example-144">Section 2.2 Image (144_10)</button>
+            </div>
+          </div>
+
+          <div class="button-group-split">
+            <button class="btn btn-primary" id="btn-run-caption" disabled>
+              <span class="spinner" id="caption-spinner" style="display: none;"></span>
+              Generate Caption (Task 9)
+            </button>
+            <button class="btn btn-secondary" id="btn-run-summary" disabled>
+              <span class="spinner" id="summary-spinner" style="display: none;"></span>
+              Generate Summary (Task 10)
+            </button>
+          </div>
+        </div>
+
+        <!-- Output Panel -->
+        <div class="panel card">
+          <div class="panel-header">
+            <h3>Multimodal Output</h3>
+            <span class="sub-label">Salesforce/blip-image-captioning-base</span>
+          </div>
+
+          <div class="results-body">
+            <div class="empty-state" id="caption-empty-state">
+              <div class="empty-icon">💬</div>
+              <p>Upload an image and click Generate Caption or Generate Summary to execute real BLIP inference.</p>
+            </div>
+
+            <div class="blip-output-box" id="caption-output-box" style="display: none;">
+              <!-- Caption Card -->
+              <div class="desc-card">
+                <div class="desc-card-header">
+                  <span class="desc-badge caption-badge">Caption Output (Prompt: "This is a picture of")</span>
+                </div>
+                <div class="desc-text" id="blip-caption-text">—</div>
+              </div>
+
+              <!-- Summary Card -->
+              <div class="desc-card">
+                <div class="desc-card-header">
+                  <span class="desc-badge summary-badge">Summary Output (Prompt: "This is a detailed photo showing")</span>
+                </div>
+                <div class="desc-text" id="blip-summary-text">—</div>
+              </div>
+
+              <!-- Important Academic Disclaimer -->
+              <div class="info-callout">
+                <strong>Honest Academic Architecture Framing:</strong>
+                <p id="blip-note-text">
+                  In this lab, "summary" is generated by conditioning the same BLIP captioning model on 
+                  an exploratory prompt prefix ("This is a detailed photo showing"). It is not a separate text summarization model.
+                  Outputs reflect visual associations learned during pretraining and are not factual guarantees.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. EVALUATION & CURVES SECTION -->
+    <section class="content-section" id="section-evaluation">
+      <div class="section-header">
+        <h2>Model Evaluation & Training Metrics</h2>
+        <p>Real loss and accuracy curves, confusion matrix, and performance metrics saved from model training and test split evaluation.</p>
+      </div>
+
+      <!-- Metrics KPI Cards -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Test Accuracy (Full Split)</div>
+          <div class="kpi-value" id="kpi-full-acc">—</div>
+          <div class="kpi-sub" id="kpi-full-samples">Samples: —</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Test Loss (Full Split)</div>
+          <div class="kpi-value" id="kpi-full-loss">—</div>
+          <div class="kpi-sub">Binary Crossentropy</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Dent Class F1-Score</div>
+          <div class="kpi-value" id="kpi-dent-f1">—</div>
+          <div class="kpi-sub" id="kpi-dent-prec-rec">Prec: — | Rec: —</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Crack Class F1-Score</div>
+          <div class="kpi-value" id="kpi-crack-f1">—</div>
+          <div class="kpi-sub" id="kpi-crack-prec-rec">Prec: — | Rec: —</div>
+        </div>
+      </div>
+
+      <!-- Figures Grid -->
+      <div class="figures-grid">
+        <!-- Accuracy Curve -->
+        <div class="figure-card card">
+          <div class="figure-header">
+            <h4>Task 6: Accuracy Curve (5x5)</h4>
+            <span class="badge">Training & Validation</span>
+          </div>
+          <div class="figure-body">
+            <img class="artifact-img" id="fig-accuracy" src="/api/results/figures/accuracy_curve.png" alt="Accuracy Curve">
+          </div>
+        </div>
+
+        <!-- Confusion Matrix -->
+        <div class="figure-card card">
+          <div class="figure-header">
+            <h4>Confusion Matrix (Test Split)</h4>
+            <span class="badge">Crack (0) vs Dent (1)</span>
+          </div>
+          <div class="figure-body">
+            <img class="artifact-img" id="fig-confusion" src="/api/results/figures/confusion_matrix.png" alt="Confusion Matrix">
+          </div>
+        </div>
+
+        <!-- Training Loss -->
+        <div class="figure-card card">
+          <div class="figure-header">
+            <h4>Training Loss</h4>
+            <span class="badge">Notebook Figure</span>
+          </div>
+          <div class="figure-body">
+            <img class="artifact-img" id="fig-train-loss" src="/api/results/figures/training_loss.png" alt="Training Loss">
+          </div>
+        </div>
+
+        <!-- Validation Loss -->
+        <div class="figure-card card">
+          <div class="figure-header">
+            <h4>Validation Loss</h4>
+            <span class="badge">Notebook Figure</span>
+          </div>
+          <div class="figure-body">
+            <img class="artifact-img" id="fig-valid-loss" src="/api/results/figures/validation_loss.png" alt="Validation Loss">
+          </div>
+        </div>
+
+        <!-- Task 7 Prediction -->
+        <div class="figure-card card">
+          <div class="figure-header">
+            <h4>Task 7: Test Prediction (Index 1)</h4>
+            <span class="badge">True vs Predicted</span>
+          </div>
+          <div class="figure-body">
+            <img class="artifact-img" id="fig-task7" src="/api/results/figures/task7_prediction.png" alt="Task 7 Prediction">
+          </div>
+        </div>
+
+        <!-- Test Grid -->
+        <div class="figure-card card">
+          <div class="figure-header">
+            <h4>Deterministic Test Predictions Grid</h4>
+            <span class="badge">Sample Predictions</span>
+          </div>
+          <div class="figure-body">
+            <img class="artifact-img" id="fig-grid" src="/api/results/figures/test_predictions_grid.png" alt="Test Grid">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. DATASET & LEAKAGE SECTION -->
+    <section class="content-section" id="section-dataset">
+      <div class="section-header">
+        <h2>Dataset Statistics & Split Leakage Analysis</h2>
+        <p>Distribution counts across train, valid, and test splits alongside data leakage audit results.</p>
+      </div>
+
+      <div class="card dataset-summary-card">
+        <div class="dataset-meta-row">
+          <div><strong>Dataset:</strong> Aircraft Damage Dataset v1</div>
+          <div><strong>Source:</strong> Roboflow Universe (youssef-donia-fhktl)</div>
+          <div><strong>License:</strong> CC BY 4.0</div>
+        </div>
+        <table class="data-table" id="dataset-table">
+          <thead>
+            <tr>
+              <th>Split</th>
+              <th>Crack (Class 0)</th>
+              <th>Dent (Class 1)</th>
+              <th>Total Split Count</th>
+            </tr>
+          </thead>
+          <tbody id="dataset-table-body">
+            <tr><td colspan="4">Loading dataset summary...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card leakage-card">
+        <h3>Roboflow Split Overlap & Leakage Audit</h3>
+        <p>
+          Roboflow filenames encode augmented variations using the format <code>&lt;id&gt;_JPG_jpg.rf.&lt;hash&gt;.jpg</code>.
+          If multiple variations of the same original source photo are assigned to different splits, data leakage occurs.
+        </p>
+        <div class="leakage-status" id="leakage-status-box">
+          <div class="leakage-stat">
+            <span class="leakage-stat-num" id="leakage-base-count">0</span>
+            <span class="leakage-stat-lbl">Source Image Overlaps Across Splits</span>
+          </div>
+          <div class="leakage-stat">
+            <span class="leakage-stat-num" id="leakage-exact-count">0</span>
+            <span class="leakage-stat-lbl">Cross-Split Exact File Duplicates</span>
+          </div>
+        </div>
+        <p class="leakage-note">
+          <em>Note: Overlaps are reported strictly for scientific transparency and academic evaluation. The original benchmark split files are never altered.</em>
+        </p>
+      </div>
+    </section>
+
+    <!-- 6. TECHNICAL & LIMITATIONS SECTION -->
+    <section class="content-section" id="section-technical">
+      <div class="section-header">
+        <h2>Technical Architecture & Known Limitations</h2>
+        <p>Comprehensive disclosure of engineering design decisions, framework boundaries, and operational constraints.</p>
+      </div>
+
+      <div class="tech-grid">
+        <div class="card tech-card">
+          <h3>Framework Boundary Isolation</h3>
+          <p>
+            The project cleanly separates <strong>TensorFlow/Keras</strong> (for the VGG16 binary classifier) 
+            and <strong>PyTorch/HuggingFace Transformers</strong> (for BLIP). No internal framework tensor 
+            objects cross process or thread boundaries; all communication utilizes file paths, PIL images, or standard strings.
+          </p>
+        </div>
+
+        <div class="card tech-card">
+          <h3>Custom Keras Layer Constraints</h3>
+          <p>
+            <code>BlipCaptionSummaryLayer</code> wraps PyTorch model execution inside a <code>tf.py_function</code> 
+            as an academic demonstration. Consequently, this layer is non-trainable, non-differentiable, and cannot be 
+            serialized into a TensorFlow SavedModel or graph. It is maintained strictly as an isolated helper.
+          </p>
+        </div>
+
+        <div class="card tech-card">
+          <h3>Aviation Safety Disclaimer</h3>
+          <p>
+            This system was developed as an educational and research demonstrator using a small publicly available dataset. 
+            It is <strong>not certified</strong> by the FAA, EASA, or any aviation authority for airworthiness determination, 
+            structural integrity evaluation, or maintenance sign-off.
+          </p>
+        </div>
+
+        <div class="card tech-card">
+          <h3>Caption & Summary Limitations</h3>
+          <p>
+            The BLIP model was trained on general web image-caption datasets. While it recognizes aircraft fuselages, engines, 
+            and surfaces, its generated text may hallucinate details or miss subtle microscopic fatigue cracks. "Summary" is 
+            conditioned solely via a longer prompt string, not a specialized aviation summarizer.
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>&copy; 2026 AeroDamage AI. Replicating IBM Skills Network Lab with Academic Integrity.</p>
+      <p class="footer-sub">Dataset CC BY 4.0 (Roboflow youssef-donia-fhktl) | Pretrained VGG16 & BLIP</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

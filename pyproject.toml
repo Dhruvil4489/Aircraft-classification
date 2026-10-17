@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aircraft-damage-ai"
+version = "1.0.0"
+description = "Aircraft Structural Damage Classification (VGG16) & Multimodal Captioning/Summarization (BLIP)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "IBM Skills Network / Antigravity" }
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pyright]
+include = ["src", "scripts", "tests"]
+extraPaths = ["src"]
+executionEnvironments = [
+  { root = "src" }
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

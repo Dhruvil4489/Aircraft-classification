@@ -1,0 +1,39 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Data and Models
+data/
+artifacts/models/
+aircraft_damage_dataset_v1
+*.tar
+*.zip
+*.gz
+
+# Python cache and build
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Hugging Face and PyTorch cache
+.cache/
+hf_cache/
+
+# Environment files
+.env
+.env.local
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and scratch
+artifacts/logs/*.log
+scratch/

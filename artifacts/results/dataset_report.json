@@ -1,0 +1,39 @@
+{
+  "dataset_name": "Aircraft Damage Dataset v1",
+  "original_source": "Roboflow Universe (Aircraft Damage Detection by youssef-donia-fhktl)",
+  "source_url": "https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/ZjXM4RKxlBK9__ZjHBLl5A/aircraft-damage-dataset-v1.tar",
+  "roboflow_url": "https://universe.roboflow.com/youssef-donia-fhktl/aircraft-damage-detection-1j9qk",
+  "license": "CC BY 4.0",
+  "academic_citation": "Roboflow Aircraft Damage Detection dataset (youssef-donia-fhktl, CC BY 4.0)",
+  "splits_summary": {
+    "train": {
+      "crack": 150,
+      "dent": 150,
+      "total": 300
+    },
+    "valid": {
+      "crack": 48,
+      "dent": 48,
+      "total": 96
+    },
+    "test": {
+      "crack": 25,
+      "dent": 25,
+      "total": 50
+    }
+  },
+  "total_images": 446,
+  "class_mapping": {
+    "crack": 0,
+    "dent": 1
+  },
+  "corrupt_images": [],
+  "unsupported_images": [],
+  "leakage_analysis": {
+    "roboflow_base_id_overlaps_count": 0,
+    "roboflow_base_id_overlaps": [],
+    "cross_split_exact_duplicates_count": 0,
+    "cross_split_exact_duplicates": [],
+    "note": "Reported for diagnostic analysis. No dataset files modified."
+  }
+}

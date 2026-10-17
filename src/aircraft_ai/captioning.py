@@ -1,0 +1,139 @@
+"""BLIP Captioning and Summarization module with concurrency protection and typed diagnostics."""
+
+import io
+import threading
+from pathlib import Path
+from typing import Any, Dict, Union
+
+from PIL import Image
+
+from aircraft_ai import config
+from aircraft_ai.errors import (
+    BlipError,
+    BlipLoadError,
+    CorruptImageError,
+    InvalidTaskError,
+)
+from aircraft_ai.logging_setup import setup_logger
+
+logger = setup_logger("aircraft_ai.captioning")
+
+# Global inference lock to guarantee concurrency of 1 for memory safety
+_BLIP_INFERENCE_LOCK = threading.Lock()
+_PROCESSOR = None
+_MODEL = None
+
+
+def get_blip_model():
+    """Retrieve or lazily initialize the singleton BLIP processor and PyTorch model."""
+    global _PROCESSOR, _MODEL
+    if _PROCESSOR is not None and _MODEL is not None:
+        return _PROCESSOR, _MODEL
+
+    try:
+        from transformers import BlipForConditionalGeneration, BlipProcessor
+        logger.info("Loading pretrained BLIP processor and model from '%s'...", config.BLIP_MODEL_ID)
+        _PROCESSOR = BlipProcessor.from_pretrained(config.BLIP_MODEL_ID)
+        _MODEL = BlipForConditionalGeneration.from_pretrained(config.BLIP_MODEL_ID)
+        _MODEL.eval()
+        logger.info("BLIP model successfully loaded onto device: %s", config.BLIP_DEVICE)
+        return _PROCESSOR, _MODEL
+    except Exception as e:
+        error_msg = (
+            f"Failed to load BLIP model '{config.BLIP_MODEL_ID}': {e}. "
+            "If operating in an offline environment, please ensure weights are pre-downloaded "
+            "to HuggingFace cache or set HF_HUB_OFFLINE=1 after downloading."
+        )
+        logger.error(error_msg)
+        raise BlipLoadError(error_msg) from e
+
+
+def describe_image(
+    image_input: Union[str, Path, bytes, Image.Image],
+    task: str = "caption",
+    max_new_tokens: int | None = None,
+    num_beams: int | None = None,
+) -> Dict[str, Any]:
+    """Generate a caption or summary for an aircraft damage image using pretrained BLIP.
+    
+    Academic framing:
+    - Both 'caption' and 'summary' utilize the exact same BLIP model checkpoint.
+    - 'caption' is conditioned on: "This is a picture of"
+    - 'summary' is conditioned on: "This is a detailed photo showing"
+    - Generated descriptions are prompt-conditioned captions and do not constitute
+      guaranteed factual or certified structural assessments.
+    """
+    normalized_task = task.strip().lower()
+    if normalized_task not in {"caption", "summary"}:
+        raise InvalidTaskError(f"Task must be 'caption' or 'summary', got '{task}'")
+
+    # Load and validate image
+    try:
+        if isinstance(image_input, (str, Path)):
+            path_obj = Path(image_input)
+            if not path_obj.exists():
+                raise FileNotFoundError(f"Image file does not exist: {path_obj}")
+            img = Image.open(str(path_obj))
+        elif isinstance(image_input, bytes):
+            img = Image.open(io.BytesIO(image_input))
+        elif isinstance(image_input, Image.Image):
+            img = image_input
+        else:
+            raise ValueError(f"Unsupported image input type: {type(image_input)}")
+
+        img.verify()
+
+        # Reopen after verify
+        if isinstance(image_input, (str, Path)):
+            img = Image.open(str(image_input))
+        elif isinstance(image_input, bytes):
+            img = Image.open(io.BytesIO(image_input))
+
+        img = img.convert("RGB")
+    except Exception as e:
+        if isinstance(e, FileNotFoundError):
+            raise
+        raise CorruptImageError(f"Failed to open or decode image: {e}") from e
+
+    # Determine prompt
+    prompt = config.CAPTION_PROMPT if normalized_task == "caption" else config.SUMMARY_PROMPT
+
+    processor, model = get_blip_model()
+
+    # Inference guarded by lock
+    with _BLIP_INFERENCE_LOCK:
+        try:
+            inputs = processor(images=img, text=prompt, return_tensors="pt")
+            gen_kwargs = {}
+            if max_new_tokens:
+                gen_kwargs["max_new_tokens"] = max_new_tokens
+            if num_beams:
+                gen_kwargs["num_beams"] = num_beams
+
+            output = model.generate(**inputs, **gen_kwargs)
+            raw_text = processor.decode(output[0], skip_special_tokens=True).strip()
+
+            # Separate prompt prefix if present for clean UI display
+            cleaned_text = raw_text
+            if raw_text.startswith(prompt):
+                cleaned_text = raw_text[len(prompt):].strip()
+                # Clean leading punctuation or lowercase transition
+                if cleaned_text.startswith(":") or cleaned_text.startswith(","):
+                    cleaned_text = cleaned_text[1:].strip()
+
+            return {
+                "task": normalized_task,
+                "prompt_used": prompt,
+                "raw_generated_text": raw_text,
+                "generated_text_without_prompt": cleaned_text,
+                "model_id": config.BLIP_MODEL_ID,
+                "device": config.BLIP_DEVICE,
+                "note": (
+                    "Note: 'summary' is generated by conditioning the BLIP captioning model "
+                    "on a detailed prompt prefix ('This is a detailed photo showing'). It is not a "
+                    "separate summarization model."
+                ),
+            }
+        except Exception as e:
+            logger.error("BLIP generation failed during task '%s': %s", normalized_task, e)
+            raise BlipError(f"BLIP generation failed: {e}") from e

@@ -1,0 +1,51 @@
+{
+  "model_id": "Salesforce/blip-image-captioning-base",
+  "device": "cpu",
+  "libraries": {
+    "torch": "2.2.0+cpu",
+    "transformers": "4.38.2",
+    "tensorflow": "2.17.1"
+  },
+  "examples": [
+    {
+      "test_case": "Task 9 (Image 149_22)",
+      "image_path": "D:\\Aircraft classification\\data\\aircraft_damage_dataset_v1\\test\\dent\\149_22_JPG_jpg.rf.4899cbb6f4aad9588fa3811bb886c34d.jpg",
+      "task": "caption",
+      "prompt_used": "This is a picture of",
+      "raw_output": "this is a picture of a plane that was sitting on the ground in a field",
+      "cleaned_output": "this is a picture of a plane that was sitting on the ground in a field",
+      "keras_layer_decoded_output": "this is a picture of a plane that was sitting on the ground in a field",
+      "layer_error_sentinel_returned": false
+    },
+    {
+      "test_case": "Task 10 (Image 149_22)",
+      "image_path": "D:\\Aircraft classification\\data\\aircraft_damage_dataset_v1\\test\\dent\\149_22_JPG_jpg.rf.4899cbb6f4aad9588fa3811bb886c34d.jpg",
+      "task": "summary",
+      "prompt_used": "This is a detailed photo showing",
+      "raw_output": "this is a detailed photo showing the damage to the fuselage of the aircraft",
+      "cleaned_output": "this is a detailed photo showing the damage to the fuselage of the aircraft",
+      "keras_layer_decoded_output": "this is a detailed photo showing the damage to the fuselage of the aircraft",
+      "layer_error_sentinel_returned": false
+    },
+    {
+      "test_case": "Section 2.2 (Image 144_10)",
+      "image_path": "D:\\Aircraft classification\\data\\aircraft_damage_dataset_v1\\test\\dent\\144_10_JPG_jpg.rf.4d008cc33e217c1606b76585469d626b.jpg",
+      "task": "caption",
+      "prompt_used": "This is a picture of",
+      "raw_output": "this is a picture of a plane",
+      "cleaned_output": "this is a picture of a plane",
+      "keras_layer_decoded_output": "this is a picture of a plane",
+      "layer_error_sentinel_returned": false
+    },
+    {
+      "test_case": "Section 2.2 (Image 144_10)",
+      "image_path": "D:\\Aircraft classification\\data\\aircraft_damage_dataset_v1\\test\\dent\\144_10_JPG_jpg.rf.4d008cc33e217c1606b76585469d626b.jpg",
+      "task": "summary",
+      "prompt_used": "This is a detailed photo showing",
+      "raw_output": "this is a detailed photo showing the engine of a boeing 747",
+      "cleaned_output": "this is a detailed photo showing the engine of a boeing 747",
+      "keras_layer_decoded_output": "this is a detailed photo showing the engine of a boeing 747",
+      "layer_error_sentinel_returned": false
+    }
+  ]
+}

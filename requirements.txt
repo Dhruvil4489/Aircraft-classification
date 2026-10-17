@@ -1,0 +1,25 @@
+# Core dependencies pinned to notebook specifications
+numpy==1.26.4
+pandas==2.2.3
+tensorflow-cpu==2.17.1
+pillow==11.1.0
+matplotlib==3.9.2
+transformers==4.38.2
+# PyTorch CPU (installed via --extra-index-url https://download.pytorch.org/whl/cpu)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.0+cpu
+torchvision==0.17.0+cpu
+
+# Application and Evaluation Services
+fastapi>=0.110.0,<1.0.0
+uvicorn[standard]>=0.28.0,<1.0.0
+python-multipart>=0.0.9
+httpx>=0.27.0
+scikit-learn>=1.4.0
+pydantic>=2.6.0
+python-dotenv>=1.0.0
+
+# Notebook Execution and Automation
+ipykernel>=6.29.0
+nbclient>=0.10.0
+nbconvert>=7.16.0
