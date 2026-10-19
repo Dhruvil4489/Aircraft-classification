@@ -1,6 +1,6 @@
 """VGG16 model building and compilation for aircraft damage classification."""
 
-from typing import Tuple
+from typing import Any, Tuple
 
 import keras
 from keras.applications import VGG16
@@ -35,7 +35,8 @@ def build_vgg16_classifier(
        ])
     """
     logger.info("Building VGG16 base model (weights=%s, input_shape=%s)...", weights, input_shape)
-    base_model = VGG16(weights=weights, include_top=False, input_shape=input_shape)
+    weights_arg: Any = weights
+    base_model = VGG16(weights=weights_arg, include_top=False, input_shape=input_shape)
 
     output = base_model.layers[-1].output
     output = Flatten()(output)

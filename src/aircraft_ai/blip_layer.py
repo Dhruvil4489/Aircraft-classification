@@ -124,4 +124,6 @@ def generate_text(image_path: Any, task: Any) -> Any:
     if not isinstance(task, tf.Tensor):
         task = tf.constant(str(task))
 
-    return blip_layer(image_path, task)
+    # Dynamic invocation allows passing both image_path and task positional arguments
+    layer_fn: Any = blip_layer
+    return layer_fn(image_path, task)

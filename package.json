@@ -1,0 +1,9 @@
+{
+  "name": "aircraft-classification",
+  "version": "1.0.0",
+  "description": "AeroDamage AI - Aircraft Structural Damage Classification & Multimodal Captioning",
+  "scripts": {
+    "dev": "powershell -NoProfile -Command \"Start-Job { Start-Sleep 2; Start-Process 'http://127.0.0.1:8000' }; .\\.venv\\Scripts\\python.exe -m uvicorn aircraft_ai.api:app --host 127.0.0.1 --port 8000 --app-dir src\"",
+    "start": "powershell -NoProfile -Command \"Start-Job { Start-Sleep 2; Start-Process 'http://127.0.0.1:8000' }; .\\.venv\\Scripts\\python.exe -m uvicorn aircraft_ai.api:app --host 127.0.0.1 --port 8000 --app-dir src\""
+  }
+}

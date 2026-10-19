@@ -18,6 +18,8 @@ where = ["src"]
 [tool.pyright]
 include = ["src", "scripts", "tests"]
 extraPaths = ["src"]
+venvPath = "."
+venv = ".venv"
 executionEnvironments = [
   { root = "src" }
 ]

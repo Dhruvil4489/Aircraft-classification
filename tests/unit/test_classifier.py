@@ -1,5 +1,7 @@
 """Unit tests for VGG16 classifier architecture, class mapping, and preprocessing."""
 
+from typing import Any
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -76,6 +78,7 @@ def test_model_architecture_fast():
 
     # Forward pass with random tensor
     synthetic_batch = np.random.rand(2, 224, 224, 3).astype(np.float32)
-    output = model.predict(synthetic_batch, verbose=0)
+    v_zero: Any = 0
+    output = model.predict(synthetic_batch, verbose=v_zero)
     assert output.shape == (2, 1)
     assert np.all(output >= 0.0) and np.all(output <= 1.0)

@@ -54,21 +54,24 @@ def main():
     ]
 
     for tc in test_cases:
-        logger.info("Running BLIP on %s with task '%s'...", tc["name"], tc["task"])
+        tc_name = str(tc["name"])
+        image_path = Path(str(tc["path"]))
+        task_name = str(tc["task"])
+        logger.info("Running BLIP on %s with task '%s'...", tc_name, task_name)
         
         # Direct describe_image
-        direct_out = describe_image(tc["path"], task=tc["task"])
+        direct_out = describe_image(image_path, task=task_name)
 
         # Keras Layer / generate_text test
-        path_tensor = tf.constant(str(tc["path"].resolve()))
-        task_tensor = tf.constant(tc["task"])
+        path_tensor = tf.constant(str(image_path.resolve()))
+        task_tensor = tf.constant(task_name)
         keras_tensor = generate_text(path_tensor, task_tensor)
-        keras_decoded = keras_tensor.numpy().decode("utf-8")
+        keras_decoded = bytes(keras_tensor.numpy()).decode("utf-8")
 
         results["examples"].append({
-            "test_case": tc["name"],
-            "image_path": str(tc["path"]),
-            "task": tc["task"],
+            "test_case": tc_name,
+            "image_path": str(image_path),
+            "task": task_name,
             "prompt_used": direct_out["prompt_used"],
             "raw_output": direct_out["raw_generated_text"],
             "cleaned_output": direct_out["generated_text_without_prompt"],

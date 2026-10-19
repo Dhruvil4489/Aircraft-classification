@@ -14,10 +14,10 @@ from aircraft_ai.logging_setup import setup_logger
 logger = setup_logger("aircraft_ai.inference")
 
 # Global singleton cache for loaded Keras model
-_LOADED_MODEL = None
+_LOADED_MODEL: Any = None
 
 
-def get_model(model_path: Path = config.MODEL_SAVE_PATH):
+def get_model(model_path: Path = config.MODEL_SAVE_PATH) -> Any:
     """Retrieve or lazily load the trained Keras model singleton."""
     global _LOADED_MODEL
     if _LOADED_MODEL is not None:
@@ -84,15 +84,14 @@ def preprocess_image(image_input: Union[str, Path, bytes, Image.Image]) -> np.nd
 
 def predict_damage(
     image_input: Union[str, Path, bytes, Image.Image],
-    model=None,
+    model: Any = None,
     threshold: float = config.CLASSIFICATION_THRESHOLD,
 ) -> Dict[str, Any]:
     """Perform real inference on a single aircraft damage image."""
-    if model is None:
-        model = get_model()
+    active_model: Any = model if model is not None else get_model()
 
     processed_batch = preprocess_image(image_input)
-    prediction = model.predict(processed_batch, verbose=0)
+    prediction = active_model.predict(processed_batch, verbose=0)
     prob_dent = float(prediction[0][0])
     prob_crack = float(1.0 - prob_dent)
 
@@ -113,20 +112,19 @@ def predict_damage(
 
 def predict_batch(
     images: List[Union[str, Path, bytes, Image.Image]],
-    model=None,
+    model: Any = None,
     threshold: float = config.CLASSIFICATION_THRESHOLD,
 ) -> List[Dict[str, Any]]:
     """Perform batched inference on multiple aircraft damage images."""
     if not images:
         return []
 
-    if model is None:
-        model = get_model()
+    active_model: Any = model if model is not None else get_model()
 
     processed_tensors = [preprocess_image(img)[0] for img in images]
     batch = np.stack(processed_tensors, axis=0)
 
-    predictions = model.predict(batch, verbose=0)
+    predictions = active_model.predict(batch, verbose=0)
     results = []
     for pred in predictions:
         prob_dent = float(pred[0])

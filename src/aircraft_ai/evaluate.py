@@ -105,17 +105,18 @@ def full_supplementary_evaluation(model, test_generator) -> Dict[str, Any]:
     dent_count = int(np.sum(true_classes == 1))
 
     # Metrics
-    prec_dent = float(precision_score(true_classes, predicted_classes, pos_label=1, zero_division=0))
-    rec_dent = float(recall_score(true_classes, predicted_classes, pos_label=1, zero_division=0))
-    f1_dent = float(f1_score(true_classes, predicted_classes, pos_label=1, zero_division=0))
+    zd: Any = 0
+    prec_dent = float(precision_score(true_classes, predicted_classes, pos_label=1, zero_division=zd))
+    rec_dent = float(recall_score(true_classes, predicted_classes, pos_label=1, zero_division=zd))
+    f1_dent = float(f1_score(true_classes, predicted_classes, pos_label=1, zero_division=zd))
 
-    prec_crack = float(precision_score(true_classes, predicted_classes, pos_label=0, zero_division=0))
-    rec_crack = float(recall_score(true_classes, predicted_classes, pos_label=0, zero_division=0))
-    f1_crack = float(f1_score(true_classes, predicted_classes, pos_label=0, zero_division=0))
+    prec_crack = float(precision_score(true_classes, predicted_classes, pos_label=0, zero_division=zd))
+    rec_crack = float(recall_score(true_classes, predicted_classes, pos_label=0, zero_division=zd))
+    f1_crack = float(f1_score(true_classes, predicted_classes, pos_label=0, zero_division=zd))
 
     # Plot Confusion Matrix
     plt.figure(figsize=(6, 5))
-    plt.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+    plt.imshow(cm, interpolation="nearest", cmap="Blues")
     plt.title("Confusion Matrix (Test Split)")
     plt.colorbar()
     tick_marks = np.arange(len(config.CLASSES))

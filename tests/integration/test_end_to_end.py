@@ -55,6 +55,6 @@ def test_blip_layer_and_generate_text(synthetic_image_rgb):
     result_tensor = generate_text(path_tensor, task_tensor)
     assert isinstance(result_tensor, tf.Tensor)
 
-    decoded = result_tensor.numpy().decode("utf-8")
+    decoded = bytes(result_tensor.numpy()).decode("utf-8")
     assert len(decoded) > 0
     assert decoded != "Error processing image", "Layer returned error sentinel for a valid image!"

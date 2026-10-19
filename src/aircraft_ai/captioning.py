@@ -3,7 +3,7 @@
 import io
 import threading
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Tuple, Union
 
 from PIL import Image
 
@@ -20,11 +20,11 @@ logger = setup_logger("aircraft_ai.captioning")
 
 # Global inference lock to guarantee concurrency of 1 for memory safety
 _BLIP_INFERENCE_LOCK = threading.Lock()
-_PROCESSOR = None
-_MODEL = None
+_PROCESSOR: Any = None
+_MODEL: Any = None
 
 
-def get_blip_model():
+def get_blip_model() -> Tuple[Any, Any]:
     """Retrieve or lazily initialize the singleton BLIP processor and PyTorch model."""
     global _PROCESSOR, _MODEL
     if _PROCESSOR is not None and _MODEL is not None:
@@ -33,9 +33,12 @@ def get_blip_model():
     try:
         from transformers import BlipForConditionalGeneration, BlipProcessor
         logger.info("Loading pretrained BLIP processor and model from '%s'...", config.BLIP_MODEL_ID)
-        _PROCESSOR = BlipProcessor.from_pretrained(config.BLIP_MODEL_ID)
-        _MODEL = BlipForConditionalGeneration.from_pretrained(config.BLIP_MODEL_ID)
-        _MODEL.eval()
+        proc: Any = BlipProcessor.from_pretrained(config.BLIP_MODEL_ID)
+        mdl: Any = BlipForConditionalGeneration.from_pretrained(config.BLIP_MODEL_ID)
+        if hasattr(mdl, "eval"):
+            mdl.eval()
+        _PROCESSOR = proc
+        _MODEL = mdl
         logger.info("BLIP model successfully loaded onto device: %s", config.BLIP_DEVICE)
         return _PROCESSOR, _MODEL
     except Exception as e:
@@ -98,6 +101,8 @@ def describe_image(
     # Determine prompt
     prompt = config.CAPTION_PROMPT if normalized_task == "caption" else config.SUMMARY_PROMPT
 
+    processor: Any
+    model: Any
     processor, model = get_blip_model()
 
     # Inference guarded by lock

@@ -27,7 +27,8 @@ def set_reproducibility_seeds(seed: int = config.SEED_VALUE) -> None:
 
 def create_generators():
     """Create train, valid, and test ImageDataGenerators exactly matching notebook tasks."""
-    from tensorflow.keras.preprocessing.image import ImageDataGenerator
+    import tensorflow as tf
+    ImageDataGenerator: Any = getattr(tf.keras.preprocessing, "image").ImageDataGenerator
 
     train_dir = str(config.TRAIN_DIR)
     valid_dir = str(config.VALID_DIR)
@@ -122,16 +123,17 @@ def plot_and_save_training_curves(history: Dict[str, list]) -> None:
     logger.info("Saved Task 6 accuracy curve plot to %s", config.ACCURACY_CURVE_PLOT_PATH)
 
 
-def verify_model_persistence(original_model, saved_path: Path, test_generator) -> float:
+def verify_model_persistence(original_model: Any, saved_path: Path, test_generator: Any) -> float:
     """Reload model and verify prediction equality with np.allclose."""
     import keras
     logger.info("Reloading model from %s to verify persistence parity...", saved_path)
-    reloaded_model = keras.models.load_model(str(saved_path))
+    reloaded_model: Any = keras.models.load_model(str(saved_path))
 
     # Take a small batch
     test_generator.reset()
     batch_images, _ = next(test_generator)
-    pred_orig = original_model.predict(batch_images, verbose=0)
+    orig_m: Any = original_model
+    pred_orig = orig_m.predict(batch_images, verbose=0)
     pred_reload = reloaded_model.predict(batch_images, verbose=0)
 
     max_diff = float(np.max(np.abs(pred_orig - pred_reload)))

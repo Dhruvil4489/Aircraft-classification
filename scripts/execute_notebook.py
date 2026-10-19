@@ -6,9 +6,12 @@ import sys
 import time
 from pathlib import Path
 
+from typing import Any
+
 # Fix for Windows asyncio event loop policy with pyzmq and tornado
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+if sys.platform == "win32" and sys.version_info < (3, 14):
+    if hasattr(asyncio, "WindowsSelectorEventLoopPolicy") and hasattr(asyncio, "set_event_loop_policy"):
+        getattr(asyncio, "set_event_loop_policy")(asyncio.WindowsSelectorEventLoopPolicy())
 
 import nbformat
 from nbclient import NotebookClient
@@ -42,8 +45,9 @@ def main():
 
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+    nb_node: Any = nb
     client = ProgressNotebookClient(
-        nb,
+        nb_node,
         timeout=600,
         kernel_name="python3",
         record_timing=True,
