@@ -18,7 +18,7 @@ from aircraft_ai.errors import (
     DatasetNotFoundError,
     ModelNotTrainedError,
 )
-from aircraft_ai.inference import get_model, predict_damage
+from aircraft_ai.inference import analyze_image, get_model, predict_damage
 from aircraft_ai.logging_setup import setup_logger
 
 logger = setup_logger("aircraft_ai.api", log_file=str(config.LOGS_DIR / "api.log"))
@@ -57,7 +57,12 @@ def validate_uploaded_image(file_bytes: bytes, filename: str | None = None) -> I
         # Re-open after verify to ensure pixel data is decoded
         img = Image.open(io.BytesIO(file_bytes))
         img.load()
-        if img.mode != "RGB":
+        if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+            img = img.convert("RGBA")
+            bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+            alpha_composite = Image.alpha_composite(bg, img)
+            img = alpha_composite.convert("RGB")
+        elif img.mode != "RGB":
             img = img.convert("RGB")
         return img
     except Exception as e:
@@ -78,7 +83,73 @@ def health_check() -> Dict[str, Any]:
         "model_trained": model_trained,
         "dataset_prepared": dataset_prepared,
         "blip_device": config.BLIP_DEVICE,
+        "domain_screening_model": config.DOMAIN_SCREENING_MODEL_ID,
         "class_mapping": config.CLASS_INDICES,
+    }
+
+
+@app.get("/api/model/status")
+def get_model_status() -> Dict[str, Any]:
+    """Return model availability, artifact paths, parameter details, and device status."""
+    model_exists = config.MODEL_SAVE_PATH.exists()
+    return {
+        "status": "ready" if model_exists else "not_trained",
+        "model_trained": model_exists,
+        "model_path": str(config.MODEL_SAVE_PATH),
+        "backbone": "ImageNet Pretrained VGG16 (Frozen)",
+        "head": "Flatten + Dense(512, ReLU) + Dropout(0.3) + Dense(512, ReLU) + Dropout(0.3) + Dense(1, Sigmoid)",
+        "weights_size_bytes": config.MODEL_SAVE_PATH.stat().st_size if model_exists else 0,
+        "domain_screening_model": config.DOMAIN_SCREENING_MODEL_ID,
+        "domain_threshold": config.DOMAIN_ACCEPTANCE_THRESHOLD,
+        "uncertainty_margin": config.UNCERTAINTY_MARGIN,
+        "blip_model": config.BLIP_MODEL_ID,
+        "blip_device": config.BLIP_DEVICE,
+    }
+
+
+@app.get("/api/model/info")
+def get_model_info() -> Dict[str, Any]:
+    """Return comprehensive academic and production model specifications."""
+    return {
+        "project": "AeroDamage AI",
+        "version": "1.0.0",
+        "backbone": {
+            "name": "VGG16",
+            "weights": "ImageNet",
+            "include_top": False,
+            "trainable": False,
+            "input_shape": list(config.INPUT_SHAPE),
+        },
+        "head": {
+            "layers": [
+                {"type": "Flatten", "output_features": 25088},
+                {"type": "Dense", "units": 512, "activation": "relu"},
+                {"type": "Dropout", "rate": 0.3},
+                {"type": "Dense", "units": 512, "activation": "relu"},
+                {"type": "Dropout", "rate": 0.3},
+                {"type": "Dense", "units": 1, "activation": "sigmoid"},
+            ],
+            "optimizer": "Adam(lr=0.0001)",
+            "loss": "binary_crossentropy",
+            "epochs": config.N_EPOCHS,
+            "batch_size": config.BATCH_SIZE,
+        },
+        "class_mapping": config.CLASS_INDICES,
+        "threshold": config.CLASSIFICATION_THRESHOLD,
+        "uncertainty_margin": config.UNCERTAINTY_MARGIN,
+        "domain_screening": {
+            "model": config.DOMAIN_SCREENING_MODEL_ID,
+            "threshold": config.DOMAIN_ACCEPTANCE_THRESHOLD,
+            "strategy": "Zero-shot CLIP contrastive prompt ensembling",
+        },
+        "captioning": {
+            "model": config.BLIP_MODEL_ID,
+            "prompts": {
+                "caption": config.CAPTION_PROMPT,
+                "summary": config.SUMMARY_PROMPT,
+            },
+        },
+        "safety_disclaimer": config.SAFETY_DISCLAIMER,
     }
 
 
@@ -108,9 +179,14 @@ def get_dataset_info() -> Dict[str, Any]:
     return data
 
 
-@app.post("/api/classify")
-async def classify_damage_endpoint(file: UploadFile = File(...)) -> Dict[str, Any]:
-    """Classify an uploaded aircraft damage image as dent or crack using trained VGG16."""
+@app.post("/api/analyze")
+async def analyze_damage_endpoint(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Execute complete 4-stage damage inspection:
+    Stage 1: Image validation and safe RGB decoding.
+    Stage 2: Semantic aircraft-image relevance screening (CLIP OOD rejection).
+    Stage 3: VGG16 binary classification (only if domain accepted).
+    Stage 4: Confidence scoring and uncertainty evaluation.
+    """
     if not config.MODEL_SAVE_PATH.exists():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -121,21 +197,27 @@ async def classify_damage_endpoint(file: UploadFile = File(...)) -> Dict[str, An
     image = validate_uploaded_image(file_bytes, filename=file.filename)
 
     try:
-        model = get_model()
-        result = predict_damage(image, model=model)
+        result = analyze_image(image)
         logger.info(
-            "Classification complete for '%s': %s (P(dent)=%.4f)",
+            "Analysis complete for '%s': status=%s, class=%s",
             file.filename,
-            result["predicted_class"],
-            result["probability_dent"],
+            result["status"],
+            result.get("predicted_class"),
         )
         return result
     except Exception as e:
-        logger.error("Inference failed: %s", e)
+        logger.error("Analysis pipeline failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Inference error: {str(e)}",
+            detail=f"Analysis pipeline error: {str(e)}",
         )
+
+
+@app.post("/api/classify")
+async def classify_damage_endpoint(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Classify damage using the multi-stage guarded analysis pipeline."""
+    return await analyze_damage_endpoint(file=file)
+
 
 
 @app.post("/api/caption")

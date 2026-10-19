@@ -3,239 +3,315 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AeroDamage AI — Aircraft Damage Classification & BLIP Captioning</title>
-  <meta name="description" content="Automated aircraft structural damage classification using ImageNet-pretrained VGG16 and image captioning/summarization via HuggingFace BLIP.">
+  <title>AeroDamage AI — Aerospace Structural Damage Inspection Workstation</title>
+  <meta name="description" content="Mission-critical automated aircraft structural damage classification (VGG16), vision-language captioning (BLIP), and zero-shot CLIP domain relevance screening.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Header / Navigation -->
+  <!-- Header / Navigation Shell -->
   <header class="app-header">
     <div class="header-container">
-      <div class="brand">
+      <div class="brand" id="brand-home">
         <div class="brand-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
         </div>
         <div class="brand-text">
           <span class="brand-title">AeroDamage AI</span>
-          <span class="brand-subtitle">VGG16 Feature Extractor + BLIP Vision-Language</span>
+          <span class="brand-subtitle">NDT Visual Health Workstation</span>
         </div>
       </div>
-      <nav class="nav-links">
-        <button class="nav-btn active" data-section="section-overview" id="btn-nav-overview">Overview</button>
-        <button class="nav-btn" data-section="section-classify" id="btn-nav-classify">Classification</button>
-        <button class="nav-btn" data-section="section-caption" id="btn-nav-caption">Caption & Summary</button>
-        <button class="nav-btn" data-section="section-evaluation" id="btn-nav-evaluation">Evaluation & Curves</button>
-        <button class="nav-btn" data-section="section-dataset" id="btn-nav-dataset">Dataset & Leakage</button>
-        <button class="nav-btn" data-section="section-technical" id="btn-nav-technical">Technical & Limitations</button>
+
+      <nav class="nav-links" id="main-nav">
+        <button class="nav-btn active" data-section="section-overview" id="nav-btn-overview">Overview</button>
+        <button class="nav-btn" data-section="section-analysis" id="nav-btn-analysis">Damage Analysis</button>
+        <button class="nav-btn" data-section="section-captioning" id="nav-btn-captioning">Image Captioning</button>
+        <button class="nav-btn" data-section="section-performance" id="nav-btn-performance">Model Performance</button>
+        <button class="nav-btn" data-section="section-dataset" id="nav-btn-dataset">Dataset & Quality</button>
+        <button class="nav-btn" data-section="section-modelinfo" id="nav-btn-modelinfo">Model Information</button>
       </nav>
-      <div class="system-status" id="system-status-indicator">
-        <span class="status-dot"></span>
-        <span class="status-text" id="system-status-text">Checking System...</span>
+
+      <div class="system-status" id="system-status-pill">
+        <span class="status-dot" id="system-status-dot"></span>
+        <span class="status-text" id="system-status-label">Initializing Telemetry...</span>
       </div>
     </div>
   </header>
 
-  <!-- Main Container -->
+  <!-- Main Workstation Viewport -->
   <main class="main-content">
     
-    <!-- System Notification Banner -->
+    <!-- Global Alert Banner -->
     <div class="alert-banner" id="global-alert-banner" style="display: none;">
-      <div class="alert-icon" id="alert-icon">⚠️</div>
-      <div class="alert-message" id="alert-message">Notice</div>
-      <button class="alert-close" id="btn-close-alert">&times;</button>
+      <span id="global-alert-text">System notice</span>
+      <button class="alert-close" id="btn-close-alert" aria-label="Close notification">&times;</button>
     </div>
 
-    <!-- 1. OVERVIEW SECTION -->
+    <!-- ====================================================================
+         PAGE 1: OVERVIEW
+         ==================================================================== -->
     <section class="content-section active" id="section-overview">
-      <div class="hero-card">
-        <div class="hero-badge">Pretrained Deep Learning & Multimodal AI</div>
-        <h1 class="hero-title">Automated Aircraft Structural Damage Inspection</h1>
-        <p class="hero-desc">
-          Automate the classification of exterior aircraft surface damage into 
-          <strong>dent</strong> or <strong>crack</strong> categories using a frozen 
-          <strong>VGG16</strong> backbone with custom dense classification head, paired with 
-          <strong>HuggingFace BLIP</strong> for prompt-conditioned natural language damage descriptions.
+      <div class="hero-workstation">
+        <div class="hero-badge-tag">IBM Skills Network Capstone Reimplementation & Reliability Extension</div>
+        <h1>Automated Aircraft Structural Damage Inspection</h1>
+        <p>
+          A dual-module aerospace computer vision platform automating the detection and description 
+          of aircraft structural skin discontinuities. Features ImageNet-pretrained <strong>VGG16</strong> with 
+          frozen feature representation for binary defect classification, <strong>Hugging Face BLIP</strong> 
+          for prompt-conditioned maintenance descriptions, and <strong>CLIP Zero-Shot</strong> out-of-distribution 
+          domain screening to prevent spurious classification of non-aircraft imagery.
         </p>
         <div class="hero-actions">
-          <button class="btn btn-primary" id="btn-hero-classify">
+          <button class="btn btn-primary" id="btn-goto-analysis">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
             </svg>
-            Analyze Damage Image
+            Launch Damage Analysis
           </button>
-          <button class="btn btn-secondary" id="btn-hero-evaluation">
+          <button class="btn btn-secondary" id="btn-goto-performance">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 20V10M12 20V4M6 20v-6"/>
             </svg>
-            View Real Metrics & Plots
+            Inspect Evaluation Metrics
           </button>
         </div>
       </div>
 
-      <div class="feature-grid">
-        <div class="feature-card">
-          <div class="card-icon blue">🔍</div>
-          <h3>Module A: VGG16 Classifier</h3>
+      <!-- Live Operational Telemetry Strip -->
+      <div class="telemetry-strip">
+        <div class="telemetry-card">
+          <div class="telemetry-label">VGG16 Classifier</div>
+          <div class="telemetry-value" id="kpi-classifier-status">Ready</div>
+          <div class="telemetry-note">14.7M frozen + 12.8M head params</div>
+        </div>
+        <div class="telemetry-card">
+          <div class="telemetry-label">Domain Screening</div>
+          <div class="telemetry-value" id="kpi-screening-status">Active</div>
+          <div class="telemetry-note">CLIP Zero-Shot OOD Rejection</div>
+        </div>
+        <div class="telemetry-card">
+          <div class="telemetry-label">Dataset Benchmark</div>
+          <div class="telemetry-value" id="kpi-dataset-count">446 Images</div>
+          <div class="telemetry-note">300 Train | 96 Valid | 50 Test</div>
+        </div>
+        <div class="telemetry-card">
+          <div class="telemetry-label">Test Split Accuracy</div>
+          <div class="telemetry-value" id="kpi-test-accuracy">76.0%</div>
+          <div class="telemetry-note">38/50 Correct (Unbiased Test)</div>
+        </div>
+      </div>
+
+      <!-- Operational Scope & Taxonomy -->
+      <div class="scope-grid">
+        <div class="card scope-card">
+          <h4>Supported Defect Taxonomy</h4>
           <p>
-            ImageNet-pretrained VGG16 feature extractor frozen at all convolutional layers. 
-            Custom dual-dense binary head (512-ReLU, Dropout 0.3, 512-ReLU, Dropout 0.3, Sigmoid). 
-            Outputs calibrated posterior probabilities P(dent) and P(crack).
+            The VGG16 classifier operates strictly on exterior aircraft structural panel photographs. 
+            Supported damage states include <strong>DENT</strong> (mechanical depressions from ground equipment impacts, 
+            hail, or bird strikes) and <strong>CRACK</strong> (linear structural fatigue discontinuities caused by cyclic 
+            pressurization or vibration).
           </p>
-          <div class="card-meta">
-            <span>Input: 224&times;224 RGB</span>
-            <span>Rescale: 1./255</span>
-          </div>
         </div>
 
-        <div class="feature-card">
-          <div class="card-icon purple">📝</div>
-          <h3>Module B: BLIP Vision-Language</h3>
+        <div class="card scope-card rejection">
+          <h4>Out-of-Distribution Rejection Protocol</h4>
           <p>
-            Conditional generation with <code>Salesforce/blip-image-captioning-base</code>. 
-            Generates natural descriptions ("This is a picture of") and detailed prompt-conditioned 
-            summaries ("This is a detailed photo showing"). Wrapped in custom Keras layer.
+            Standard binary networks forcibly classify arbitrary inputs into one of their two target classes. 
+            AeroDamage AI integrates zero-shot contrastive screening to verify domain relevance before running 
+            inference. Non-aircraft images (handwritten signatures, documents, portraits, vehicles, landscapes) 
+            are safely rejected without emitting misleading defect probabilities.
           </p>
-          <div class="card-meta">
-            <span>PyTorch 2.2 CPU</span>
-            <span>Concurrency Lock: 1</span>
-          </div>
         </div>
 
-        <div class="feature-card">
-          <div class="card-icon amber">🛡️</div>
-          <h3>Safety & Academic Integrity</h3>
+        <div class="card scope-card">
+          <h4>Educational & Research Disclaimer</h4>
           <p>
-            Strict academic replication of all 10 notebook tasks. All metrics, curves, and predictions 
-            are generated dynamically from real execution artifacts. Clear aviation safety disclaimers 
-            disclosed on every assessment.
+            This system is an academic engineering demonstrator replicating and extending the IBM Skills Network 
+            curriculum. It is <strong>not certified</strong> by the FAA, EASA, or civil aviation authorities for 
+            airworthiness determination, airframe maintenance sign-off, or non-destructive testing (NDT) certification.
           </p>
-          <div class="card-meta">
-            <span>Seed: 42</span>
-            <span>Zero Mocking Policy</span>
-          </div>
         </div>
       </div>
     </section>
 
-    <!-- 2. CLASSIFICATION SECTION -->
-    <section class="content-section" id="section-classify">
+    <!-- ====================================================================
+         PAGE 2: DAMAGE ANALYSIS WORKSTATION (PRIMARY INSPECTION PAGE)
+         ==================================================================== -->
+    <section class="content-section" id="section-analysis">
       <div class="section-header">
-        <h2>Module A — Damage Classification (Dent vs Crack)</h2>
-        <p>Upload an aircraft inspection photograph or select a pre-verified test image to obtain real VGG16 model predictions.</p>
+        <h2>Structural Damage Analysis Workstation</h2>
+        <p>Upload high-resolution aircraft panel imagery to execute the 4-stage validated defect inspection pipeline.</p>
       </div>
 
       <div class="interactive-layout">
-        <!-- Input Panel -->
-        <div class="panel card">
+        <!-- Left: Image Viewport Panel -->
+        <div class="card">
           <div class="panel-header">
-            <h3>Image Input</h3>
-            <span class="badge" id="model-status-badge">Model Ready</span>
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              Inspection Image Input
+            </h3>
+            <span class="badge ready" id="analysis-model-badge">Pipeline Active</span>
           </div>
 
           <!-- Dropzone -->
-          <div class="dropzone" id="classify-dropzone">
-            <input type="file" id="classify-file-input" accept="image/jpeg,image/png,image/webp" style="display: none;">
-            <div class="dropzone-inner" id="dropzone-content">
+          <div class="dropzone" id="analysis-dropzone">
+            <input type="file" id="analysis-file-input" accept="image/jpeg,image/png,image/webp" style="display: none;">
+            <div class="dropzone-content" id="analysis-dropzone-content">
               <div class="dropzone-icon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                   <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
               </div>
-              <p class="dropzone-text">Drag and drop an aircraft damage image here, or <span class="highlight">browse</span></p>
+              <p class="dropzone-text">Drag & drop aircraft inspection photo here, or <span class="highlight">browse</span></p>
               <span class="dropzone-hint">Supports JPEG, PNG, WebP up to 10 MB</span>
             </div>
-            <!-- Image Preview -->
-            <div class="preview-container" id="classify-preview-container" style="display: none;">
-              <img id="classify-preview-image" src="" alt="Damage Preview">
-              <button class="btn btn-sm btn-danger remove-preview-btn" id="btn-remove-classify-preview">&times; Remove</button>
+
+            <!-- Preview Viewport -->
+            <div class="preview-container" id="analysis-preview-container" style="display: none;">
+              <div class="preview-image-wrapper">
+                <img id="analysis-preview-img" src="" alt="Inspection Preview">
+              </div>
+              <div class="image-meta-bar" id="analysis-image-meta">
+                <span id="img-meta-dimensions">224 &times; 224 px</span>
+                <span id="img-meta-size">0 KB</span>
+                <span id="img-meta-format">JPEG</span>
+              </div>
+              <div class="preview-actions">
+                <button class="btn btn-sm btn-secondary btn-block" id="btn-replace-analysis-img">Replace Image</button>
+                <button class="btn btn-sm btn-danger" id="btn-remove-analysis-img">&times; Clear</button>
+              </div>
             </div>
           </div>
 
-          <!-- Examples Selector -->
+          <!-- Pre-verified Test Benchmarks -->
           <div class="examples-picker">
-            <label class="picker-label">Or choose a real test image from the dataset:</label>
-            <div class="example-buttons" id="classify-example-buttons">
-              <button class="example-btn" data-type="dent" data-file="dent_example_1.jpg" id="btn-example-dent-1">Dent Test #1</button>
-              <button class="example-btn" data-type="dent" data-file="dent_example_2.jpg" id="btn-example-dent-2">Dent Test #2 (Task 9)</button>
-              <button class="example-btn" data-type="crack" data-file="crack_example_1.jpg" id="btn-example-crack-1">Crack Test #1</button>
+            <label class="picker-label">Load Pre-Verified Benchmark Samples:</label>
+            <div class="example-buttons">
+              <button class="example-btn" data-file="dent_example_1.jpg" id="btn-sample-dent1">Dent Test #1</button>
+              <button class="example-btn" data-file="dent_example_2.jpg" id="btn-sample-dent2">Dent Test #2 (Task 9)</button>
+              <button class="example-btn" data-file="crack_example_1.jpg" id="btn-sample-crack1">Crack Test #1</button>
+              <button class="example-btn reject-fixture" data-type="signature" id="btn-sample-signature">Signature (OOD Test)</button>
             </div>
           </div>
 
-          <div class="panel-footer">
-            <button class="btn btn-primary btn-block" id="btn-run-classify" disabled>
-              <span class="spinner" id="classify-spinner" style="display: none;"></span>
-              <span id="classify-btn-text">Run VGG16 Classification</span>
+          <div style="margin-top: 1rem;">
+            <button class="btn btn-primary btn-block" id="btn-run-analysis" disabled>
+              <span class="spinner" id="analysis-spinner" style="display: none;"></span>
+              <span id="analysis-btn-text">Execute 4-Stage Inspection Pipeline</span>
             </button>
           </div>
         </div>
 
-        <!-- Output Results Panel -->
-        <div class="panel card">
+        <!-- Right: Multi-Stage Telemetry & Results Console -->
+        <div class="card">
           <div class="panel-header">
-            <h3>Prediction Results</h3>
-            <span class="sub-label">Threshold = 0.5</span>
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+              Inspection Telemetry & Decision Console
+            </h3>
+            <span class="badge" id="decision-threshold-badge">Threshold = 0.50</span>
           </div>
 
-          <div class="results-body" id="classify-results-body">
-            <div class="empty-state" id="classify-empty-state">
-              <div class="empty-icon">📊</div>
-              <p>Upload an image and run classification to view real neural network probabilities.</p>
+          <!-- Pipeline Stage Progress Tracker -->
+          <div class="pipeline-tracker" id="pipeline-tracker">
+            <div class="stage-step" id="step-validation">1. File Check</div>
+            <div class="stage-step" id="step-screening">2. Domain OOD</div>
+            <div class="stage-step" id="step-classifier">3. VGG16 Head</div>
+            <div class="stage-step" id="step-uncertainty">4. Uncertainty</div>
+          </div>
+
+          <!-- Results Container -->
+          <div class="results-viewport" id="analysis-results-viewport">
+            <!-- Empty State -->
+            <div class="empty-state" id="analysis-empty-state">
+              <div class="empty-state-icon">🛡️</div>
+              <p>Upload or select an image to initiate the multi-stage structural inspection analysis.</p>
             </div>
 
-            <div class="inference-result" id="classify-result-content" style="display: none;">
-              <div class="prediction-banner" id="prediction-banner">
-                <span class="prediction-label-title">Predicted Damage Type:</span>
-                <span class="prediction-label-value" id="res-predicted-class">—</span>
+            <!-- Populated Results View -->
+            <div class="results-content" id="analysis-results-content" style="display: none;">
+              <!-- Decision Banner -->
+              <div class="decision-banner" id="res-decision-banner">
+                <span class="decision-title" id="res-decision-title">Defect Status</span>
+                <span class="decision-label" id="res-decision-label">—</span>
+                <p class="decision-text" id="res-decision-message">—</p>
               </div>
 
-              <!-- Probabilities -->
-              <div class="prob-group">
-                <div class="prob-row">
-                  <div class="prob-meta">
-                    <span class="prob-name">Dent (Class 1)</span>
-                    <span class="prob-val" id="res-prob-dent">0.0%</span>
+              <!-- Raw Model Scores (Only shown for supported images) -->
+              <div class="scores-block" id="res-scores-block">
+                <div class="score-row">
+                  <div class="score-meta">
+                    <span>Dent Score P(dent)</span>
+                    <span id="val-score-dent">0.00%</span>
                   </div>
-                  <div class="progress-bar-bg">
-                    <div class="progress-bar-fill fill-blue" id="res-bar-dent" style="width: 0%;"></div>
+                  <div class="bar-track">
+                    <div class="bar-fill dent" id="bar-score-dent" style="width: 0%;"></div>
                   </div>
                 </div>
 
-                <div class="prob-row">
-                  <div class="prob-meta">
-                    <span class="prob-name">Crack (Class 0)</span>
-                    <span class="prob-val" id="res-prob-crack">0.0%</span>
+                <div class="score-row">
+                  <div class="score-meta">
+                    <span>Crack Score P(crack) = 1 - P(dent)</span>
+                    <span id="val-score-crack">0.00%</span>
                   </div>
-                  <div class="progress-bar-bg">
-                    <div class="progress-bar-fill fill-red" id="res-bar-crack" style="width: 0%;"></div>
+                  <div class="bar-track">
+                    <div class="bar-fill crack" id="bar-score-crack" style="width: 0%;"></div>
                   </div>
-                </div>
-              </div>
-
-              <!-- Metadata & Class Mapping -->
-              <div class="meta-box">
-                <div class="meta-item">
-                  <span class="meta-k">Class Mapping:</span>
-                  <span class="meta-v"><code>crack: 0</code>, <code>dent: 1</code> (Sigmoid = P(dent))</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-k">Preprocessing:</span>
-                  <span class="meta-v">224&times;224 RGB, scaled 1./255</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-k">Model Architecture:</span>
-                  <span class="meta-v">ImageNet VGG16 (Frozen) + Dual Dense(512)</span>
                 </div>
               </div>
 
-              <!-- Aviation Disclaimer -->
-              <div class="disclaimer-callout">
-                <strong>Aviation Safety Notice:</strong>
-                <span id="res-disclaimer">Model output for educational purposes only; not a certified aviation safety assessment.</span>
+              <!-- Domain Screening Breakdown (Shown for all, critical for rejected images) -->
+              <div class="scores-block" id="res-domain-block" style="display: none;">
+                <div class="score-row">
+                  <div class="score-meta">
+                    <span>Aircraft In-Domain Relevance</span>
+                    <span id="val-domain-score">0.00%</span>
+                  </div>
+                  <div class="bar-track">
+                    <div class="bar-fill amber" id="bar-domain-score" style="width: 0%;"></div>
+                  </div>
+                </div>
+                <div style="font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-secondary); margin-top: 0.5rem;">
+                  <span>Matched Category: </span><strong id="res-matched-category" style="color: var(--text-pure);">—</strong>
+                </div>
+              </div>
+
+              <!-- Technical Telemetry Details -->
+              <div class="telemetry-grid">
+                <div class="telemetry-item">
+                  <div class="telemetry-item-k">Pipeline Decision</div>
+                  <div class="telemetry-item-v" id="tel-pipeline-status">—</div>
+                </div>
+                <div class="telemetry-item">
+                  <div class="telemetry-item-k">Confidence Type</div>
+                  <div class="telemetry-item-v" id="tel-confidence-type">Uncalibrated Sigmoid</div>
+                </div>
+                <div class="telemetry-item">
+                  <div class="telemetry-item-k">Decision Margin</div>
+                  <div class="telemetry-item-v" id="tel-decision-margin">&plusmn; 0.00</div>
+                </div>
+                <div class="telemetry-item">
+                  <div class="telemetry-item-k">Preprocessing Parity</div>
+                  <div class="telemetry-item-v" id="tel-preprocessing">224&times;224, 1./255</div>
+                </div>
+              </div>
+
+              <!-- Aviation Safety Disclaimer -->
+              <div class="disclaimer-box">
+                <strong>Safety Notice:</strong> <span id="res-safety-disclaimer">Model output for educational purposes only; not a certified aviation safety assessment.</span>
               </div>
             </div>
           </div>
@@ -243,91 +319,88 @@
       </div>
     </section>
 
-    <!-- 3. CAPTION & SUMMARY SECTION -->
-    <section class="content-section" id="section-caption">
+    <!-- ====================================================================
+         PAGE 3: IMAGE CAPTIONING (MODULE B - BLIP)
+         ==================================================================== -->
+    <section class="content-section" id="section-captioning">
       <div class="section-header">
-        <h2>Module B — BLIP Vision-Language Captioning & Summarization</h2>
-        <p>Generate prompt-conditioned natural language descriptions using Salesforce's BLIP conditional generation model.</p>
+        <h2>Multimodal Vision-Language Captioning & Summarization</h2>
+        <p>Hugging Face Salesforce/blip-image-captioning-base conditioned with academic prompt prefixes.</p>
       </div>
 
       <div class="interactive-layout">
-        <div class="panel card">
+        <!-- Left: Upload for BLIP -->
+        <div class="card">
           <div class="panel-header">
-            <h3>Image Input</h3>
-            <span class="badge" id="blip-status-badge">BLIP Ready</span>
+            <h3>Image Input (Vision-Language)</h3>
+            <span class="badge ready">PyTorch CPU</span>
           </div>
 
           <div class="dropzone" id="caption-dropzone">
             <input type="file" id="caption-file-input" accept="image/jpeg,image/png,image/webp" style="display: none;">
-            <div class="dropzone-inner" id="caption-dropzone-content">
+            <div class="dropzone-content" id="caption-dropzone-content">
               <div class="dropzone-icon">📷</div>
-              <p class="dropzone-text">Upload image for captioning / summarization</p>
+              <p class="dropzone-text">Upload image for natural language description</p>
               <span class="dropzone-hint">Supports JPEG, PNG up to 10 MB</span>
             </div>
             <div class="preview-container" id="caption-preview-container" style="display: none;">
-              <img id="caption-preview-image" src="" alt="BLIP Image Preview">
-              <button class="btn btn-sm btn-danger remove-preview-btn" id="btn-remove-caption-preview">&times; Remove</button>
+              <div class="preview-image-wrapper">
+                <img id="caption-preview-img" src="" alt="BLIP Preview">
+              </div>
+              <button class="btn btn-sm btn-danger btn-block" id="btn-remove-caption-img">&times; Remove</button>
             </div>
           </div>
 
-          <!-- Examples Selector -->
           <div class="examples-picker">
-            <label class="picker-label">Or choose an academic benchmark image:</label>
-            <div class="example-buttons" id="caption-example-buttons">
-              <button class="example-btn" data-file="task9_task10_image.jpg" id="btn-example-task9">Task 9/10 Image (149_22)</button>
-              <button class="example-btn" data-file="144_10_image.jpg" id="btn-example-144">Section 2.2 Image (144_10)</button>
+            <label class="picker-label">Choose Academic Benchmark Images:</label>
+            <div class="example-buttons">
+              <button class="example-btn" data-file="task9_task10_image.jpg" id="btn-caption-sample-1">Task 9/10 Sample (149_22)</button>
+              <button class="example-btn" data-file="144_10_image.jpg" id="btn-caption-sample-2">Section 2.2 Sample (144_10)</button>
             </div>
           </div>
 
-          <div class="button-group-split">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 1rem;">
             <button class="btn btn-primary" id="btn-run-caption" disabled>
               <span class="spinner" id="caption-spinner" style="display: none;"></span>
-              Generate Caption (Task 9)
+              Caption (Task 9)
             </button>
             <button class="btn btn-secondary" id="btn-run-summary" disabled>
               <span class="spinner" id="summary-spinner" style="display: none;"></span>
-              Generate Summary (Task 10)
+              Summary (Task 10)
             </button>
           </div>
         </div>
 
-        <!-- Output Panel -->
-        <div class="panel card">
+        <!-- Right: BLIP Output Display -->
+        <div class="card">
           <div class="panel-header">
-            <h3>Multimodal Output</h3>
-            <span class="sub-label">Salesforce/blip-image-captioning-base</span>
+            <h3>Generated Natural Language Telemetry</h3>
+            <span class="badge cyan">Prompt-Conditioned BLIP</span>
           </div>
 
-          <div class="results-body">
+          <div class="results-viewport">
             <div class="empty-state" id="caption-empty-state">
-              <div class="empty-icon">💬</div>
-              <p>Upload an image and click Generate Caption or Generate Summary to execute real BLIP inference.</p>
+              <div class="empty-state-icon">📝</div>
+              <p>Upload an image and trigger Caption or Summary generation.</p>
             </div>
 
-            <div class="blip-output-box" id="caption-output-box" style="display: none;">
-              <!-- Caption Card -->
-              <div class="desc-card">
-                <div class="desc-card-header">
-                  <span class="desc-badge caption-badge">Caption Output (Prompt: "This is a picture of")</span>
-                </div>
-                <div class="desc-text" id="blip-caption-text">—</div>
+            <div class="results-content" id="caption-results-content" style="display: none;">
+              <div class="blip-result-card">
+                <div class="blip-prompt-header">Task 9 Caption (Prompt: "This is a picture of")</div>
+                <div class="blip-generated-text" id="blip-caption-output">Generating caption...</div>
               </div>
 
-              <!-- Summary Card -->
-              <div class="desc-card">
-                <div class="desc-card-header">
-                  <span class="desc-badge summary-badge">Summary Output (Prompt: "This is a detailed photo showing")</span>
-                </div>
-                <div class="desc-text" id="blip-summary-text">—</div>
+              <div class="blip-result-card">
+                <div class="blip-prompt-header">Task 10 Summary (Prompt: "This is a detailed photo showing")</div>
+                <div class="blip-generated-text" id="blip-summary-output">Click "Summary" to condition prefix...</div>
               </div>
 
-              <!-- Important Academic Disclaimer -->
-              <div class="info-callout">
-                <strong>Honest Academic Architecture Framing:</strong>
-                <p id="blip-note-text">
+              <div class="disclaimer-box" style="margin-top: 1rem;">
+                <strong>Academic Architecture Framing:</strong>
+                <p style="margin-top: 0.25rem;">
                   In this lab, "summary" is generated by conditioning the same BLIP captioning model on 
-                  an exploratory prompt prefix ("This is a detailed photo showing"). It is not a separate text summarization model.
-                  Outputs reflect visual associations learned during pretraining and are not factual guarantees.
+                  an exploratory prompt prefix. It is not an independently trained summarization network. 
+                  Captions represent vision-language associative pretraining and must not be treated as ground truth for defect classification.
                 </p>
               </div>
             </div>
@@ -336,209 +409,253 @@
       </div>
     </section>
 
-    <!-- 4. EVALUATION & CURVES SECTION -->
-    <section class="content-section" id="section-evaluation">
+    <!-- ====================================================================
+         PAGE 4: MODEL PERFORMANCE & METRICS
+         ==================================================================== -->
+    <section class="content-section" id="section-performance">
       <div class="section-header">
-        <h2>Model Evaluation & Training Metrics</h2>
-        <p>Real loss and accuracy curves, confusion matrix, and performance metrics saved from model training and test split evaluation.</p>
+        <h2>Model Performance & Evaluation Artifacts</h2>
+        <p>Quantitative evaluation metrics and loss/accuracy curves saved from real training and unbiased test-set evaluation.</p>
       </div>
 
-      <!-- Metrics KPI Cards -->
-      <div class="kpi-grid" id="kpi-grid">
+      <!-- Real KPI Cards -->
+      <div class="kpi-grid">
         <div class="kpi-card">
           <div class="kpi-label">Test Accuracy (Full Split)</div>
-          <div class="kpi-value" id="kpi-full-acc">—</div>
-          <div class="kpi-sub" id="kpi-full-samples">Samples: —</div>
+          <div class="kpi-value" id="kpi-eval-acc">76.0%</div>
+          <div class="kpi-sub" id="kpi-eval-samples">Evaluated: 50 / 50 test images</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Test Loss (Full Split)</div>
-          <div class="kpi-value" id="kpi-full-loss">—</div>
-          <div class="kpi-sub">Binary Crossentropy</div>
+          <div class="kpi-label">Test Loss</div>
+          <div class="kpi-value" id="kpi-eval-loss">0.5783</div>
+          <div class="kpi-sub">Binary Cross-Entropy</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Dent Class F1-Score</div>
-          <div class="kpi-value" id="kpi-dent-f1">—</div>
-          <div class="kpi-sub" id="kpi-dent-prec-rec">Prec: — | Rec: —</div>
+          <div class="kpi-label">Dent Precision / Recall / F1</div>
+          <div class="kpi-value" id="kpi-eval-dent-f1">79.3%</div>
+          <div class="kpi-sub" id="kpi-eval-dent-sub">Prec: 69.7% | Rec: 92.0%</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Crack Class F1-Score</div>
-          <div class="kpi-value" id="kpi-crack-f1">—</div>
-          <div class="kpi-sub" id="kpi-crack-prec-rec">Prec: — | Rec: —</div>
+          <div class="kpi-label">Crack Precision / Recall / F1</div>
+          <div class="kpi-value" id="kpi-eval-crack-f1">71.4%</div>
+          <div class="kpi-sub" id="kpi-eval-crack-sub">Prec: 88.2% | Rec: 60.0%</div>
         </div>
       </div>
 
       <!-- Figures Grid -->
       <div class="figures-grid">
-        <!-- Accuracy Curve -->
-        <div class="figure-card card">
+        <div class="card figure-card">
           <div class="figure-header">
             <h4>Task 6: Accuracy Curve (5x5)</h4>
             <span class="badge">Training & Validation</span>
           </div>
           <div class="figure-body">
-            <img class="artifact-img" id="fig-accuracy" src="/api/results/figures/accuracy_curve.png" alt="Accuracy Curve">
+            <img id="fig-acc-curve" src="/api/results/figures/accuracy_curve.png" alt="Training & Validation Accuracy Curve">
           </div>
         </div>
 
-        <!-- Confusion Matrix -->
-        <div class="figure-card card">
+        <div class="card figure-card">
           <div class="figure-header">
-            <h4>Confusion Matrix (Test Split)</h4>
-            <span class="badge">Crack (0) vs Dent (1)</span>
+            <h4>Confusion Matrix (50 Test Samples)</h4>
+            <span class="badge">Crack: 0, Dent: 1</span>
           </div>
           <div class="figure-body">
-            <img class="artifact-img" id="fig-confusion" src="/api/results/figures/confusion_matrix.png" alt="Confusion Matrix">
+            <img id="fig-conf-matrix" src="/api/results/figures/confusion_matrix.png" alt="Confusion Matrix">
           </div>
         </div>
 
-        <!-- Training Loss -->
-        <div class="figure-card card">
+        <div class="card figure-card">
           <div class="figure-header">
-            <h4>Training Loss</h4>
-            <span class="badge">Notebook Figure</span>
+            <h4>Training Loss (5 Epochs)</h4>
+            <span class="badge">Binary Crossentropy</span>
           </div>
           <div class="figure-body">
-            <img class="artifact-img" id="fig-train-loss" src="/api/results/figures/training_loss.png" alt="Training Loss">
+            <img id="fig-loss-train" src="/api/results/figures/training_loss.png" alt="Training Loss Curve">
           </div>
         </div>
 
-        <!-- Validation Loss -->
-        <div class="figure-card card">
+        <div class="card figure-card">
           <div class="figure-header">
-            <h4>Validation Loss</h4>
-            <span class="badge">Notebook Figure</span>
+            <h4>Validation Loss (5 Epochs)</h4>
+            <span class="badge">Binary Crossentropy</span>
           </div>
           <div class="figure-body">
-            <img class="artifact-img" id="fig-valid-loss" src="/api/results/figures/validation_loss.png" alt="Validation Loss">
+            <img id="fig-loss-valid" src="/api/results/figures/validation_loss.png" alt="Validation Loss Curve">
           </div>
         </div>
 
-        <!-- Task 7 Prediction -->
-        <div class="figure-card card">
+        <div class="card figure-card">
           <div class="figure-header">
             <h4>Task 7: Test Prediction (Index 1)</h4>
-            <span class="badge">True vs Predicted</span>
+            <span class="badge">Notebook Solution Plot</span>
           </div>
           <div class="figure-body">
-            <img class="artifact-img" id="fig-task7" src="/api/results/figures/task7_prediction.png" alt="Task 7 Prediction">
+            <img id="fig-task7-pred" src="/api/results/figures/task7_prediction.png" alt="Task 7 Test Prediction">
           </div>
         </div>
 
-        <!-- Test Grid -->
-        <div class="figure-card card">
+        <div class="card figure-card">
           <div class="figure-header">
-            <h4>Deterministic Test Predictions Grid</h4>
-            <span class="badge">Sample Predictions</span>
+            <h4>Deterministic Test Grid Predictions</h4>
+            <span class="badge">50 Test Images</span>
           </div>
           <div class="figure-body">
-            <img class="artifact-img" id="fig-grid" src="/api/results/figures/test_predictions_grid.png" alt="Test Grid">
+            <img id="fig-test-grid" src="/api/results/figures/test_predictions_grid.png" alt="Test Predictions Grid">
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 5. DATASET & LEAKAGE SECTION -->
+    <!-- ====================================================================
+         PAGE 5: DATASET & QUALITY
+         ==================================================================== -->
     <section class="content-section" id="section-dataset">
       <div class="section-header">
-        <h2>Dataset Statistics & Split Leakage Analysis</h2>
-        <p>Distribution counts across train, valid, and test splits alongside data leakage audit results.</p>
+        <h2>Dataset Quality & Data Leakage Audit</h2>
+        <p>Distribution statistics, source licensing attribution, and cross-split overlap verification.</p>
       </div>
 
-      <div class="card dataset-summary-card">
-        <div class="dataset-meta-row">
-          <div><strong>Dataset:</strong> Aircraft Damage Dataset v1</div>
-          <div><strong>Source:</strong> Roboflow Universe (youssef-donia-fhktl)</div>
-          <div><strong>License:</strong> CC BY 4.0</div>
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="panel-header">
+          <h3>Dataset Attribution & Split Counts</h3>
+          <span class="badge emerald">CC BY 4.0</span>
         </div>
-        <table class="data-table" id="dataset-table">
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Source: Roboflow Universe <code>aircraft-damage-detection-1j9qk</code> by user <code>youssef-donia-fhktl</code>. 
+          Distributed via IBM Cloud Object Storage for the IBM Skills Network Deep Learning Capstone Project.
+        </p>
+        <table class="data-table">
           <thead>
             <tr>
-              <th>Split</th>
+              <th>Dataset Split</th>
               <th>Crack (Class 0)</th>
               <th>Dent (Class 1)</th>
-              <th>Total Split Count</th>
+              <th>Total Samples</th>
+              <th>Balance Ratio</th>
             </tr>
           </thead>
-          <tbody id="dataset-table-body">
-            <tr><td colspan="4">Loading dataset summary...</td></tr>
+          <tbody id="dataset-split-tbody">
+            <tr>
+              <td>Training Set (train)</td>
+              <td>150</td>
+              <td>150</td>
+              <td>300</td>
+              <td>50% / 50%</td>
+            </tr>
+            <tr>
+              <td>Validation Set (valid)</td>
+              <td>48</td>
+              <td>48</td>
+              <td>96</td>
+              <td>50% / 50%</td>
+            </tr>
+            <tr>
+              <td>Test Set (test)</td>
+              <td>25</td>
+              <td>25</td>
+              <td>50</td>
+              <td>50% / 50%</td>
+            </tr>
+            <tr style="font-weight: 700; color: var(--color-cyan);">
+              <td>Full Benchmark Dataset</td>
+              <td>223</td>
+              <td>223</td>
+              <td>446</td>
+              <td>1.00 Balanced</td>
+            </tr>
           </tbody>
         </table>
       </div>
 
-      <div class="card leakage-card">
-        <h3>Roboflow Split Overlap & Leakage Audit</h3>
-        <p>
-          Roboflow filenames encode augmented variations using the format <code>&lt;id&gt;_JPG_jpg.rf.&lt;hash&gt;.jpg</code>.
-          If multiple variations of the same original source photo are assigned to different splits, data leakage occurs.
+      <div class="card">
+        <div class="panel-header">
+          <h3>Roboflow Cross-Split Leakage Audit</h3>
+          <span class="badge ready">Integrity Checked</span>
+        </div>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Roboflow filenames encode image transformations via <code>&lt;id&gt;_JPG_jpg.rf.&lt;hash&gt;.jpg</code>. 
+          Our automated pipeline analyzed all 446 image hashes and base identifiers across splits:
         </p>
-        <div class="leakage-status" id="leakage-status-box">
-          <div class="leakage-stat">
-            <span class="leakage-stat-num" id="leakage-base-count">0</span>
-            <span class="leakage-stat-lbl">Source Image Overlaps Across Splits</span>
+        <div class="telemetry-grid">
+          <div class="telemetry-item">
+            <div class="telemetry-item-k">Cross-Split Base ID Overlaps</div>
+            <div class="telemetry-item-v" id="leakage-base-overlaps">0</div>
           </div>
-          <div class="leakage-stat">
-            <span class="leakage-stat-num" id="leakage-exact-count">0</span>
-            <span class="leakage-stat-lbl">Cross-Split Exact File Duplicates</span>
+          <div class="telemetry-item">
+            <div class="telemetry-item-k">Cross-Split Byte Duplicates</div>
+            <div class="telemetry-item-v" id="leakage-byte-duplicates">0</div>
           </div>
         </div>
-        <p class="leakage-note">
-          <em>Note: Overlaps are reported strictly for scientific transparency and academic evaluation. The original benchmark split files are never altered.</em>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.75rem;">
+          <em>Scientific transparency note: The dataset splits are evaluated in their original distribution without altering test set images.</em>
         </p>
       </div>
     </section>
 
-    <!-- 6. TECHNICAL & LIMITATIONS SECTION -->
-    <section class="content-section" id="section-technical">
+    <!-- ====================================================================
+         PAGE 6: MODEL INFORMATION & SPECS
+         ==================================================================== -->
+    <section class="content-section" id="section-modelinfo">
       <div class="section-header">
-        <h2>Technical Architecture & Known Limitations</h2>
-        <p>Comprehensive disclosure of engineering design decisions, framework boundaries, and operational constraints.</p>
+        <h2>Model Architecture & Technical Specifications</h2>
+        <p>Complete academic design specifications, frozen backbone details, and runtime configurations.</p>
       </div>
 
-      <div class="tech-grid">
-        <div class="card tech-card">
-          <h3>Framework Boundary Isolation</h3>
-          <p>
-            The project cleanly separates <strong>TensorFlow/Keras</strong> (for the VGG16 binary classifier) 
-            and <strong>PyTorch/HuggingFace Transformers</strong> (for BLIP). No internal framework tensor 
-            objects cross process or thread boundaries; all communication utilizes file paths, PIL images, or standard strings.
-          </p>
+      <div class="tech-spec-grid">
+        <div class="card">
+          <div class="panel-header">
+            <h3>Module A: VGG16 Classification Head</h3>
+            <span class="badge cyan">TensorFlow 2.17 / Keras 3</span>
+          </div>
+          <table class="data-table">
+            <tbody>
+              <tr><td>Feature Extractor</td><td>VGG16 (ImageNet pretrained, frozen)</td></tr>
+              <tr><td>Input Dimensions</td><td>224 &times; 224 &times; 3 RGB</td></tr>
+              <tr><td>Rescaling Preprocessing</td><td>1.0 / 255.0 (Bilinear resize)</td></tr>
+              <tr><td>Flatten Layer</td><td>25,088 features</td></tr>
+              <tr><td>Dense Layer 1</td><td>512 units, ReLU activation</td></tr>
+              <tr><td>Dropout 1</td><td>Rate = 0.30</td></tr>
+              <tr><td>Dense Layer 2</td><td>512 units, ReLU activation</td></tr>
+              <tr><td>Dropout 2</td><td>Rate = 0.30</td></tr>
+              <tr><td>Output Layer</td><td>1 unit, Sigmoid activation</td></tr>
+              <tr><td>Loss Function</td><td>Binary Cross-Entropy</td></tr>
+              <tr><td>Optimizer</td><td>Adam (&eta; = 0.0001)</td></tr>
+              <tr><td>Decision Threshold</td><td>&tau; = 0.50 (dent if &gt; 0.50 else crack)</td></tr>
+              <tr><td>Uncertainty Margin</td><td>&Delta; = &plusmn;0.12 ([0.38, 0.62] = Uncertain)</td></tr>
+            </tbody>
+          </table>
         </div>
 
-        <div class="card tech-card">
-          <h3>Custom Keras Layer Constraints</h3>
-          <p>
-            <code>BlipCaptionSummaryLayer</code> wraps PyTorch model execution inside a <code>tf.py_function</code> 
-            as an academic demonstration. Consequently, this layer is non-trainable, non-differentiable, and cannot be 
-            serialized into a TensorFlow SavedModel or graph. It is maintained strictly as an isolated helper.
-          </p>
-        </div>
-
-        <div class="card tech-card">
-          <h3>Aviation Safety Disclaimer</h3>
-          <p>
-            This system was developed as an educational and research demonstrator using a small publicly available dataset. 
-            It is <strong>not certified</strong> by the FAA, EASA, or any aviation authority for airworthiness determination, 
-            structural integrity evaluation, or maintenance sign-off.
-          </p>
-        </div>
-
-        <div class="card tech-card">
-          <h3>Caption & Summary Limitations</h3>
-          <p>
-            The BLIP model was trained on general web image-caption datasets. While it recognizes aircraft fuselages, engines, 
-            and surfaces, its generated text may hallucinate details or miss subtle microscopic fatigue cracks. "Summary" is 
-            conditioned solely via a longer prompt string, not a specialized aviation summarizer.
-          </p>
+        <div class="card">
+          <div class="panel-header">
+            <h3>Domain Screening & Multimodal Systems</h3>
+            <span class="badge ready">Zero-Shot CLIP & BLIP</span>
+          </div>
+          <table class="data-table">
+            <tbody>
+              <tr><td>Domain Screening Model</td><td><code>openai/clip-vit-base-patch32</code></td></tr>
+              <tr><td>Screening Strategy</td><td>Contrastive text-image prompt ensembling</td></tr>
+              <tr><td>Acceptance Threshold</td><td>&theta; = 0.50 in-domain probability</td></tr>
+              <tr><td>Rejection Classes</td><td>Signatures, text, portraits, vehicles, nature, drawings</td></tr>
+              <tr><td>Captioning Backbone</td><td><code>Salesforce/blip-image-captioning-base</code></td></tr>
+              <tr><td>Custom Keras Layer</td><td><code>BlipCaptionSummaryLayer</code> (tf.py_function)</td></tr>
+              <tr><td>Task 9 Prompt</td><td><code>"This is a picture of"</code></td></tr>
+              <tr><td>Task 10 Prompt</td><td><code>"This is a detailed photo showing"</code></td></tr>
+              <tr><td>Hardware Runtime</td><td>x86_64 CPU (PyTorch 2.2.0 + TF 2.17.1)</td></tr>
+              <tr><td>Model Artifact Path</td><td><code>artifacts/models/vgg16_aircraft_damage.keras</code></td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
 
   </main>
 
+  <!-- Global Footer -->
   <footer class="app-footer">
     <div class="footer-container">
-      <p>&copy; 2026 AeroDamage AI. Replicating IBM Skills Network Lab with Academic Integrity.</p>
-      <p class="footer-sub">Dataset CC BY 4.0 (Roboflow youssef-donia-fhktl) | Pretrained VGG16 & BLIP</p>
+      <p>&copy; 2026 AeroDamage AI — Academic Fidelity & Deep Learning Reliability Engineering.</p>
+      <p>Dataset CC BY 4.0 (Roboflow youssef-donia-fhktl) | Pretrained VGG16, CLIP, and BLIP Models.</p>
     </div>
   </footer>
 

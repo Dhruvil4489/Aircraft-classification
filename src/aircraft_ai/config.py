@@ -84,7 +84,35 @@ ALLOWED_FIGURE_NAMES = {
 # Safety disclaimer
 SAFETY_DISCLAIMER = "Model output for educational purposes only; not a certified aviation safety assessment."
 
+# Domain Screening & Out-of-Distribution Rejection (CLIP Zero-Shot)
+DOMAIN_SCREENING_MODEL_ID = os.getenv("DOMAIN_SCREENING_MODEL_ID", "openai/clip-vit-base-patch32")
+DOMAIN_ACCEPTANCE_THRESHOLD = float(os.getenv("DOMAIN_ACCEPTANCE_THRESHOLD", "0.50"))
+UNCERTAINTY_MARGIN = float(os.getenv("UNCERTAINTY_MARGIN", "0.12"))
+
+IN_DOMAIN_PROMPTS = [
+    "a photo of an aircraft exterior fuselage surface showing damage or defect",
+    "a close-up technical inspection photo of an aircraft metal panel with crack or dent",
+    "an airplane wing, tail, or metallic skin panel during structural inspection",
+]
+
+OUT_OF_DOMAIN_PROMPTS = [
+    "a handwritten signature or cursive ink writing on plain paper",
+    "a printed text document, letter, invoice, contract, or receipt",
+    "a photograph of a person, human face, or portrait",
+    "a photograph of an automobile car, truck, or bicycle",
+    "an animal, dog, cat, or wildlife",
+    "a natural landscape, mountains, forest, ocean, or scenic sky",
+    "a digital diagram, screenshot, user interface, or cartoon drawing",
+]
+
+# Supported Analysis Outcomes
+STATUS_COMPLETED = "COMPLETED"
+STATUS_UNSUPPORTED = "UNSUPPORTED_IMAGE"
+STATUS_UNCERTAIN = "UNCERTAIN"
+STATUS_FAILED = "ANALYSIS_FAILED"
+
 # P2 Flags (Optional enhancements, default OFF)
 ENABLE_DATA_AUGMENTATION = os.getenv("ENABLE_DATA_AUGMENTATION", "false").lower() == "true"
 ENABLE_FINE_TUNING = os.getenv("ENABLE_FINE_TUNING", "false").lower() == "true"
 ENABLE_CLASS_WEIGHTS = os.getenv("ENABLE_CLASS_WEIGHTS", "false").lower() == "true"
+

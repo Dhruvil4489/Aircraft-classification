@@ -1,454 +1,573 @@
 /**
- * AeroDamage AI — Frontend Application Logic
- * Vanilla JavaScript (ES6) for reactive, real inference and analytics.
+ * AeroDamage AI — Aerospace Engineering Workstation Client Application
+ * Handles state management, multi-stage inspection telemetry, and API integration.
  */
 
 document.addEventListener("DOMContentLoaded", () => {
-  // State
-  let selectedClassifyBlob = null;
-  let selectedCaptionBlob = null;
-  let isClassifying = false;
-  let isCaptioning = false;
-  let isSummarizing = false;
-
-  // DOM Elements - Navigation
+  // Navigation elements
   const navButtons = document.querySelectorAll(".nav-btn");
   const contentSections = document.querySelectorAll(".content-section");
-  const statusIndicator = document.getElementById("system-status-indicator");
-  const statusText = document.getElementById("system-status-text");
-  const statusDot = statusIndicator?.querySelector(".status-dot");
+  const brandHome = document.getElementById("brand-home");
+  const btnGotoAnalysis = document.getElementById("btn-goto-analysis");
+  const btnGotoPerformance = document.getElementById("btn-goto-performance");
+
+  // Alert elements
   const alertBanner = document.getElementById("global-alert-banner");
-  const alertMessage = document.getElementById("alert-message");
+  const alertText = document.getElementById("global-alert-text");
   const btnCloseAlert = document.getElementById("btn-close-alert");
 
-  // Hero Actions
-  document.getElementById("btn-hero-classify")?.addEventListener("click", () => switchSection("section-classify"));
-  document.getElementById("btn-hero-evaluation")?.addEventListener("click", () => switchSection("section-evaluation"));
+  // System status elements
+  const statusDot = document.getElementById("system-status-dot");
+  const statusLabel = document.getElementById("system-status-label");
 
-  // 1. Navigation Controller
-  function switchSection(targetId) {
-    contentSections.forEach((section) => {
-      section.classList.toggle("active", section.id === targetId);
-    });
-    navButtons.forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.section === targetId);
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  // Analysis elements
+  const analysisDropzone = document.getElementById("analysis-dropzone");
+  const analysisFileInput = document.getElementById("analysis-file-input");
+  const analysisDropzoneContent = document.getElementById("analysis-dropzone-content");
+  const analysisPreviewContainer = document.getElementById("analysis-preview-container");
+  const analysisPreviewImg = document.getElementById("analysis-preview-img");
+  const imgMetaDimensions = document.getElementById("img-meta-dimensions");
+  const imgMetaSize = document.getElementById("img-meta-size");
+  const imgMetaFormat = document.getElementById("img-meta-format");
+  const btnReplaceAnalysisImg = document.getElementById("btn-replace-analysis-img");
+  const btnRemoveAnalysisImg = document.getElementById("btn-remove-analysis-img");
+  const btnRunAnalysis = document.getElementById("btn-run-analysis");
+  const analysisSpinner = document.getElementById("analysis-spinner");
+  const analysisBtnText = document.getElementById("analysis-btn-text");
 
-  navButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.dataset.section) switchSection(btn.dataset.section);
-    });
-  });
+  // Pipeline stage indicators
+  const stepValidation = document.getElementById("step-validation");
+  const stepScreening = document.getElementById("step-screening");
+  const stepClassifier = document.getElementById("step-classifier");
+  const stepUncertainty = document.getElementById("step-uncertainty");
 
-  // Alert Handler
-  function showAlert(msg, isWarning = true) {
-    if (!alertBanner || !alertMessage) return;
-    alertMessage.textContent = msg;
-    alertBanner.style.display = "flex";
-    alertBanner.style.background = isWarning ? "rgba(245, 158, 11, 0.15)" : "rgba(239, 68, 68, 0.15)";
-    alertBanner.style.borderColor = isWarning ? "rgba(245, 158, 11, 0.4)" : "rgba(239, 68, 68, 0.4)";
-  }
+  // Analysis result elements
+  const analysisEmptyState = document.getElementById("analysis-empty-state");
+  const analysisResultsContent = document.getElementById("analysis-results-content");
+  const resDecisionBanner = document.getElementById("res-decision-banner");
+  const resDecisionTitle = document.getElementById("res-decision-title");
+  const resDecisionLabel = document.getElementById("res-decision-label");
+  const resDecisionMessage = document.getElementById("res-decision-message");
+  const resScoresBlock = document.getElementById("res-scores-block");
+  const valScoreDent = document.getElementById("val-score-dent");
+  const barScoreDent = document.getElementById("bar-score-dent");
+  const valScoreCrack = document.getElementById("val-score-crack");
+  const barScoreCrack = document.getElementById("bar-score-crack");
+  const resDomainBlock = document.getElementById("res-domain-block");
+  const valDomainScore = document.getElementById("val-domain-score");
+  const barDomainScore = document.getElementById("bar-domain-score");
+  const resMatchedCategory = document.getElementById("res-matched-category");
+  const telPipelineStatus = document.getElementById("tel-pipeline-status");
+  const telConfidenceType = document.getElementById("tel-confidence-type");
+  const telDecisionMargin = document.getElementById("tel-decision-margin");
+  const telPreprocessing = document.getElementById("tel-preprocessing");
+  const resSafetyDisclaimer = document.getElementById("res-safety-disclaimer");
 
-  btnCloseAlert?.addEventListener("click", () => {
-    if (alertBanner) alertBanner.style.display = "none";
-  });
-
-  // 2. Health & Status Check
-  async function checkSystemHealth() {
-    try {
-      const res = await fetch("/health");
-      if (res.ok) {
-        const data = await res.json();
-        if (statusDot) {
-          statusDot.className = "status-dot online";
-        }
-        if (statusText) {
-          statusText.textContent = data.model_trained ? "Model Ready (Trained)" : "API Online (Untrained)";
-        }
-        const badge = document.getElementById("model-status-badge");
-        if (badge) {
-          badge.textContent = data.model_trained ? "Model Ready" : "Untrained (Run Training)";
-        }
-      } else {
-        throw new Error("Server responded with error status");
-      }
-    } catch (err) {
-      if (statusDot) statusDot.className = "status-dot offline";
-      if (statusText) statusText.textContent = "API Offline";
-    }
-  }
-
-  // 3. Classification Setup
-  const classifyDropzone = document.getElementById("classify-dropzone");
-  const classifyFileInput = document.getElementById("classify-file-input");
-  const classifyPreviewContainer = document.getElementById("classify-preview-container");
-  const classifyPreviewImage = document.getElementById("classify-preview-image");
-  const dropzoneContent = document.getElementById("dropzone-content");
-  const btnRemoveClassifyPreview = document.getElementById("btn-remove-classify-preview");
-  const btnRunClassify = document.getElementById("btn-run-classify");
-  const classifySpinner = document.getElementById("classify-spinner");
-  const classifyBtnText = document.getElementById("classify-btn-text");
-
-  // Drag & drop
-  classifyDropzone?.addEventListener("click", (e) => {
-    if (e.target !== btnRemoveClassifyPreview) {
-      classifyFileInput?.click();
-    }
-  });
-
-  classifyDropzone?.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    classifyDropzone.classList.add("dragover");
-  });
-
-  classifyDropzone?.addEventListener("dragleave", () => {
-    classifyDropzone.classList.remove("dragover");
-  });
-
-  classifyDropzone?.addEventListener("drop", (e) => {
-    e.preventDefault();
-    classifyDropzone.classList.remove("dragover");
-    if (e.dataTransfer?.files && e.dataTransfer.files[0]) {
-      handleClassifyFile(e.dataTransfer.files[0]);
-    }
-  });
-
-  classifyFileInput?.addEventListener("change", (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleClassifyFile(e.target.files[0]);
-    }
-  });
-
-  function handleClassifyFile(file) {
-    if (!file.type.match(/image\/(jpeg|png|webp)/)) {
-      showAlert("Unsupported file type. Please upload a JPEG, PNG, or WebP image.");
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      showAlert("File size exceeds 10 MB limit.");
-      return;
-    }
-    selectedClassifyBlob = file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (classifyPreviewImage && classifyPreviewContainer && dropzoneContent) {
-        classifyPreviewImage.src = e.target.result;
-        classifyPreviewContainer.style.display = "flex";
-        dropzoneContent.style.display = "none";
-        btnRunClassify.disabled = false;
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
-  btnRemoveClassifyPreview?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    selectedClassifyBlob = null;
-    if (classifyPreviewContainer) classifyPreviewContainer.style.display = "none";
-    if (dropzoneContent) dropzoneContent.style.display = "block";
-    if (classifyFileInput) classifyFileInput.value = "";
-    if (btnRunClassify) btnRunClassify.disabled = true;
-    document.getElementById("classify-empty-state").style.display = "block";
-    document.getElementById("classify-result-content").style.display = "none";
-  });
-
-  // Example buttons for classification
-  document.querySelectorAll("#classify-example-buttons .example-btn").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const fileName = btn.dataset.file;
-      try {
-        const res = await fetch(`/api/examples/${fileName}`);
-        if (!res.ok) throw new Error("Example file not found on server.");
-        const blob = await res.blob();
-        handleClassifyFile(new File([blob], fileName, { type: "image/jpeg" }));
-      } catch (err) {
-        showAlert(`Could not load example image: ${err.message}`);
-      }
-    });
-  });
-
-  // Run Real VGG16 Classification
-  btnRunClassify?.addEventListener("click", async () => {
-    if (!selectedClassifyBlob || isClassifying) return;
-    isClassifying = true;
-    btnRunClassify.disabled = true;
-    classifySpinner.style.display = "inline-block";
-    classifyBtnText.textContent = "Running Inference...";
-
-    const formData = new FormData();
-    formData.append("file", selectedClassifyBlob);
-
-    try {
-      const res = await fetch("/api/classify", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (res.status === 503) {
-        const errData = await res.json();
-        showAlert(errData.detail || "Model not trained yet. Please train the model first.", true);
-        return;
-      }
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Classification failed");
-      }
-
-      const data = await res.json();
-      displayClassificationResult(data);
-    } catch (err) {
-      showAlert(`Classification Error: ${err.message}`);
-    } finally {
-      isClassifying = false;
-      btnRunClassify.disabled = false;
-      classifySpinner.style.display = "none";
-      classifyBtnText.textContent = "Run VGG16 Classification";
-    }
-  });
-
-  function displayClassificationResult(data) {
-    document.getElementById("classify-empty-state").style.display = "none";
-    const resBox = document.getElementById("classify-result-content");
-    resBox.style.display = "block";
-
-    const labelVal = document.getElementById("res-predicted-class");
-    labelVal.textContent = data.predicted_class;
-    labelVal.className = `prediction-label-value ${data.predicted_class}`;
-
-    const probDentPct = (data.probability_dent * 100).toFixed(2);
-    const probCrackPct = (data.probability_crack * 100).toFixed(2);
-
-    document.getElementById("res-prob-dent").textContent = `${probDentPct}%`;
-    document.getElementById("res-bar-dent").style.width = `${probDentPct}%`;
-
-    document.getElementById("res-prob-crack").textContent = `${probCrackPct}%`;
-    document.getElementById("res-bar-crack").style.width = `${probCrackPct}%`;
-
-    document.getElementById("res-disclaimer").textContent = data.disclaimer;
-  }
-
-  // 4. Caption & Summary Setup
+  // Captioning elements
   const captionDropzone = document.getElementById("caption-dropzone");
   const captionFileInput = document.getElementById("caption-file-input");
-  const captionPreviewContainer = document.getElementById("caption-preview-container");
-  const captionPreviewImage = document.getElementById("caption-preview-image");
   const captionDropzoneContent = document.getElementById("caption-dropzone-content");
-  const btnRemoveCaptionPreview = document.getElementById("btn-remove-caption-preview");
+  const captionPreviewContainer = document.getElementById("caption-preview-container");
+  const captionPreviewImg = document.getElementById("caption-preview-img");
+  const btnRemoveCaptionImg = document.getElementById("btn-remove-caption-img");
   const btnRunCaption = document.getElementById("btn-run-caption");
   const btnRunSummary = document.getElementById("btn-run-summary");
   const captionSpinner = document.getElementById("caption-spinner");
   const summarySpinner = document.getElementById("summary-spinner");
+  const captionEmptyState = document.getElementById("caption-empty-state");
+  const captionResultsContent = document.getElementById("caption-results-content");
+  const blipCaptionOutput = document.getElementById("blip-caption-output");
+  const blipSummaryOutput = document.getElementById("blip-summary-output");
 
-  captionDropzone?.addEventListener("click", (e) => {
-    if (e.target !== btnRemoveCaptionPreview) {
-      captionFileInput?.click();
+  // State
+  let currentAnalysisBlob = null;
+  let currentCaptionBlob = null;
+  let isAnalyzing = false;
+
+  // =========================================================================
+  // Navigation & Tabs
+  // =========================================================================
+  function switchTab(sectionId) {
+    navButtons.forEach(btn => {
+      const isTarget = btn.dataset.section === sectionId;
+      btn.classList.toggle("active", isTarget);
+    });
+
+    contentSections.forEach(sec => {
+      sec.classList.toggle("active", sec.id === sectionId);
+    });
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  navButtons.forEach(btn => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.section));
+  });
+
+  brandHome?.addEventListener("click", () => switchTab("section-overview"));
+  btnGotoAnalysis?.addEventListener("click", () => switchTab("section-analysis"));
+  btnGotoPerformance?.addEventListener("click", () => switchTab("section-performance"));
+
+  // =========================================================================
+  // Alert Notifications
+  // =========================================================================
+  function showAlert(msg, type = "amber") {
+    if (!alertBanner || !alertText) return;
+    alertBanner.className = `alert-banner ${type}`;
+    alertText.textContent = msg;
+    alertBanner.style.display = "flex";
+  }
+
+  function hideAlert() {
+    if (alertBanner) alertBanner.style.display = "none";
+  }
+
+  btnCloseAlert?.addEventListener("click", hideAlert);
+
+  // =========================================================================
+  // Live Telemetry Initialization
+  // =========================================================================
+  async function initSystemTelemetry() {
+    try {
+      const res = await fetch("/api/model/status");
+      if (!res.ok) throw new Error("Status API unreachable");
+      const data = await res.json();
+
+      if (data.model_trained) {
+        statusDot?.classList.add("online");
+        statusDot?.classList.remove("offline");
+        if (statusLabel) statusLabel.textContent = "Telemetry Online — VGG16 & CLIP Active";
+        const kpiClassifier = document.getElementById("kpi-classifier-status");
+        if (kpiClassifier) kpiClassifier.textContent = "Ready (v1.0)";
+      } else {
+        statusDot?.classList.add("offline");
+        statusDot?.classList.remove("online");
+        if (statusLabel) statusLabel.textContent = "Model Artifact Absent";
+      }
+    } catch (err) {
+      statusDot?.classList.add("offline");
+      if (statusLabel) statusLabel.textContent = "Telemetry Disconnected";
+    }
+
+    // Load evaluation metrics
+    try {
+      const evalRes = await fetch("/api/evaluation");
+      if (evalRes.ok) {
+        const evalData = await evalRes.json();
+        const full = evalData.full_supplementary_evaluation || {};
+        
+        const kpiAcc = document.getElementById("kpi-eval-acc");
+        if (kpiAcc && full.test_accuracy !== undefined) {
+          kpiAcc.textContent = `${(full.test_accuracy * 100).toFixed(1)}%`;
+        }
+
+        const kpiLoss = document.getElementById("kpi-eval-loss");
+        if (kpiLoss && full.test_loss !== undefined) {
+          kpiLoss.textContent = full.test_loss.toFixed(4);
+        }
+
+        const kpiDentF1 = document.getElementById("kpi-eval-dent-f1");
+        const dentMetrics = full.positive_class_dent_metrics || {};
+        if (kpiDentF1 && dentMetrics.f1_score !== undefined) {
+          kpiDentF1.textContent = `${(dentMetrics.f1_score * 100).toFixed(1)}%`;
+        }
+
+        const kpiCrackF1 = document.getElementById("kpi-eval-crack-f1");
+        const crackMetrics = full.negative_class_crack_metrics || {};
+        if (kpiCrackF1 && crackMetrics.f1_score !== undefined) {
+          kpiCrackF1.textContent = `${(crackMetrics.f1_score * 100).toFixed(1)}%`;
+        }
+      }
+    } catch (e) {
+      console.warn("Evaluation metrics fetch failed:", e);
+    }
+  }
+
+  initSystemTelemetry();
+
+  // =========================================================================
+  // Damage Analysis Viewport Handlers
+  // =========================================================================
+  analysisDropzone?.addEventListener("click", (e) => {
+    if (!analysisPreviewContainer || analysisPreviewContainer.style.display === "none") {
+      analysisFileInput?.click();
     }
   });
 
-  captionDropzone?.addEventListener("dragover", (e) => {
+  btnReplaceAnalysisImg?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    analysisFileInput?.click();
+  });
+
+  analysisDropzone?.addEventListener("dragover", (e) => {
     e.preventDefault();
-    captionDropzone.classList.add("dragover");
+    analysisDropzone.classList.add("dragover");
   });
 
-  captionDropzone?.addEventListener("dragleave", () => {
-    captionDropzone.classList.remove("dragover");
+  analysisDropzone?.addEventListener("dragleave", () => {
+    analysisDropzone.classList.remove("dragover");
   });
 
-  captionDropzone?.addEventListener("drop", (e) => {
+  analysisDropzone?.addEventListener("drop", (e) => {
     e.preventDefault();
-    captionDropzone.classList.remove("dragover");
-    if (e.dataTransfer?.files && e.dataTransfer.files[0]) {
-      handleCaptionFile(e.dataTransfer.files[0]);
+    analysisDropzone.classList.remove("dragover");
+    if (e.dataTransfer?.files?.[0]) {
+      handleAnalysisFile(e.dataTransfer.files[0]);
     }
   });
 
-  captionFileInput?.addEventListener("change", (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleCaptionFile(e.target.files[0]);
+  analysisFileInput?.addEventListener("change", (e) => {
+    if (e.target.files?.[0]) {
+      handleAnalysisFile(e.target.files[0]);
     }
   });
 
-  function handleCaptionFile(file) {
-    if (!file.type.match(/image\/(jpeg|png|webp)/)) {
-      showAlert("Unsupported file type for captioning. Use JPEG, PNG or WebP.");
+  function handleAnalysisFile(file) {
+    if (!file.type.match(/^image\/(jpeg|png|webp)$/i) && !file.name.match(/\.(jpe?g|png|webp)$/i)) {
+      showAlert("Unsupported file format. Please upload a valid JPEG, PNG, or WebP image.", "error");
       return;
     }
-    selectedCaptionBlob = file;
+
+    if (file.size > 10 * 1024 * 1024) {
+      showAlert("Upload exceeds 10 MB limit. Please select a smaller file.", "error");
+      return;
+    }
+
+    hideAlert();
+    currentAnalysisBlob = file;
+
     const reader = new FileReader();
     reader.onload = (e) => {
-      captionPreviewImage.src = e.target.result;
-      captionPreviewContainer.style.display = "flex";
-      captionDropzoneContent.style.display = "none";
-      btnRunCaption.disabled = false;
-      btnRunSummary.disabled = false;
+      if (analysisPreviewImg && analysisPreviewContainer && analysisDropzoneContent) {
+        analysisPreviewImg.src = e.target.result;
+        
+        // Populate natural dimensions once loaded
+        analysisPreviewImg.onload = () => {
+          if (imgMetaDimensions) {
+            imgMetaDimensions.textContent = `${analysisPreviewImg.naturalWidth} \u00D7 ${analysisPreviewImg.naturalHeight} px`;
+          }
+        };
+
+        if (imgMetaSize) {
+          const kb = (file.size / 1024).toFixed(1);
+          imgMetaSize.textContent = `${kb} KB`;
+        }
+
+        if (imgMetaFormat) {
+          imgMetaFormat.textContent = file.type ? file.type.replace("image/", "").toUpperCase() : "IMAGE";
+        }
+
+        analysisPreviewContainer.style.display = "flex";
+        analysisDropzoneContent.style.display = "none";
+        btnRunAnalysis.disabled = false;
+        resetPipelineStages();
+      }
     };
     reader.readAsDataURL(file);
   }
 
-  btnRemoveCaptionPreview?.addEventListener("click", (e) => {
+  btnRemoveAnalysisImg?.addEventListener("click", (e) => {
     e.stopPropagation();
-    selectedCaptionBlob = null;
-    captionPreviewContainer.style.display = "none";
-    captionDropzoneContent.style.display = "block";
-    captionFileInput.value = "";
-    btnRunCaption.disabled = true;
-    btnRunSummary.disabled = true;
-    document.getElementById("caption-empty-state").style.display = "block";
-    document.getElementById("caption-output-box").style.display = "none";
+    currentAnalysisBlob = null;
+    if (analysisPreviewContainer) analysisPreviewContainer.style.display = "none";
+    if (analysisDropzoneContent) analysisDropzoneContent.style.display = "block";
+    if (analysisFileInput) analysisFileInput.value = "";
+    if (btnRunAnalysis) btnRunAnalysis.disabled = true;
+    resetPipelineStages();
+    if (analysisEmptyState) analysisEmptyState.style.display = "block";
+    if (analysisResultsContent) analysisResultsContent.style.display = "none";
   });
 
-  // Examples buttons for BLIP
-  document.querySelectorAll("#caption-example-buttons .example-btn").forEach((btn) => {
+  function resetPipelineStages() {
+    [stepValidation, stepScreening, stepClassifier, stepUncertainty].forEach(step => {
+      if (step) {
+        step.className = "stage-step";
+      }
+    });
+  }
+
+  // Pre-verified Benchmark Sample Buttons
+  document.querySelectorAll(".example-btn[data-file]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const fileName = btn.dataset.file;
       try {
         const res = await fetch(`/api/examples/${fileName}`);
-        if (!res.ok) throw new Error("Example file not found on server.");
+        if (!res.ok) throw new Error("Sample file not found on server");
         const blob = await res.blob();
-        handleCaptionFile(new File([blob], fileName, { type: "image/jpeg" }));
+        handleAnalysisFile(new File([blob], fileName, { type: "image/jpeg" }));
       } catch (err) {
-        showAlert(`Could not load example: ${err.message}`);
+        showAlert(`Failed to load benchmark sample: ${err.message}`, "error");
       }
     });
   });
 
-  // Run BLIP Caption
+  // Out-of-Domain Signature Fixture Generator Button
+  const btnSampleSignature = document.getElementById("btn-sample-signature");
+  btnSampleSignature?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    // Render high-contrast synthetic handwritten signature fixture on canvas
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 200;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 400, 200);
+
+    // Draw cursive ink strokes
+    ctx.strokeStyle = "#001a70";
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(35, 110);
+    ctx.bezierCurveTo(70, 30, 90, 160, 130, 70);
+    ctx.bezierCurveTo(160, 20, 180, 140, 220, 60);
+    ctx.bezierCurveTo(250, 110, 290, 40, 340, 140);
+    ctx.stroke();
+
+    // Underline stroke
+    ctx.beginPath();
+    ctx.moveTo(50, 150);
+    ctx.lineTo(360, 138);
+    ctx.stroke();
+
+    canvas.toBlob((blob) => {
+      handleAnalysisFile(new File([blob], "handwritten_signature_ood_fixture.png", { type: "image/png" }));
+    }, "image/png");
+  });
+
+  // =========================================================================
+  // Execute 4-Stage Inspection Pipeline
+  // =========================================================================
+  btnRunAnalysis?.addEventListener("click", async () => {
+    if (!currentAnalysisBlob || isAnalyzing) return;
+    isAnalyzing = true;
+    btnRunAnalysis.disabled = true;
+    if (analysisSpinner) analysisSpinner.style.display = "inline-block";
+    if (analysisBtnText) analysisBtnText.textContent = "Executing 4-Stage Pipeline...";
+
+    // Stage 1: File check active
+    resetPipelineStages();
+    if (stepValidation) stepValidation.className = "stage-step active";
+
+    const formData = new FormData();
+    formData.append("file", currentAnalysisBlob);
+
+    try {
+      // Transition to Stage 2: Domain Screening
+      if (stepValidation) stepValidation.className = "stage-step success";
+      if (stepScreening) stepScreening.className = "stage-step active";
+
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Analysis request failed");
+      }
+
+      const data = await res.json();
+      displayAnalysisResult(data);
+    } catch (err) {
+      showAlert(`Pipeline Execution Failure: ${err.message}`, "error");
+      if (stepScreening) stepScreening.className = "stage-step rejected";
+    } finally {
+      isAnalyzing = false;
+      btnRunAnalysis.disabled = false;
+      if (analysisSpinner) analysisSpinner.style.display = "none";
+      if (analysisBtnText) analysisBtnText.textContent = "Execute 4-Stage Inspection Pipeline";
+    }
+  });
+
+  function displayAnalysisResult(data) {
+    if (analysisEmptyState) analysisEmptyState.style.display = "none";
+    if (analysisResultsContent) analysisResultsContent.style.display = "block";
+
+    const isSupported = data.is_supported;
+    const status = data.status;
+
+    if (!isSupported) {
+      // Stage 2 rejected: Non-aircraft image
+      if (stepValidation) stepValidation.className = "stage-step success";
+      if (stepScreening) stepScreening.className = "stage-step rejected";
+      if (stepClassifier) stepClassifier.className = "stage-step";
+      if (stepUncertainty) stepUncertainty.className = "stage-step";
+
+      // Banner styling
+      if (resDecisionBanner) resDecisionBanner.className = "decision-banner unsupported";
+      if (resDecisionTitle) resDecisionTitle.textContent = "DOMAIN REJECTION — OUT-OF-DISTRIBUTION";
+      if (resDecisionLabel) resDecisionLabel.textContent = "UNSUPPORTED IMAGE";
+      if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
+
+      // Hide VGG16 score bars
+      if (resScoresBlock) resScoresBlock.style.display = "none";
+
+      // Show Domain screening block
+      if (resDomainBlock) {
+        resDomainBlock.style.display = "block";
+        const oodPct = (data.confidence * 100).toFixed(1);
+        if (valDomainScore) valDomainScore.textContent = `${(data.domain_screening.in_domain_score * 100).toFixed(1)}% In-Domain (${oodPct}% Reject Confidence)`;
+        if (barDomainScore) barDomainScore.style.width = `${(data.domain_screening.in_domain_score * 100).toFixed(1)}%`;
+        if (resMatchedCategory) resMatchedCategory.textContent = data.domain_screening.matched_category || "Non-Aircraft Image";
+      }
+
+      // Telemetry items
+      if (telPipelineStatus) telPipelineStatus.textContent = "REJECTED (OOD)";
+      if (telConfidenceType) telConfidenceType.textContent = "Zero-Shot CLIP Screening";
+      if (telDecisionMargin) telDecisionMargin.textContent = "N/A (Classifier Not Run)";
+      if (telPreprocessing) telPreprocessing.textContent = "Screened Before VGG16 Input";
+    } else if (status === "UNCERTAIN") {
+      // Stage 4 uncertain
+      if (stepValidation) stepValidation.className = "stage-step success";
+      if (stepScreening) stepScreening.className = "stage-step success";
+      if (stepClassifier) stepClassifier.className = "stage-step success";
+      if (stepUncertainty) stepUncertainty.className = "stage-step rejected";
+
+      if (resDecisionBanner) resDecisionBanner.className = "decision-banner uncertain";
+      if (resDecisionTitle) resDecisionTitle.textContent = "AMBIGUOUS STRUCTURAL DEFECT";
+      if (resDecisionLabel) resDecisionLabel.textContent = "UNCERTAIN — MANUAL REVIEW REQUIRED";
+      if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
+
+      renderScoreBars(data);
+    } else {
+      // Supported and classified
+      if (stepValidation) stepValidation.className = "stage-step success";
+      if (stepScreening) stepScreening.className = "stage-step success";
+      if (stepClassifier) stepClassifier.className = "stage-step success";
+      if (stepUncertainty) stepUncertainty.className = "stage-step success";
+
+      const isDent = data.predicted_class === "dent";
+      if (resDecisionBanner) resDecisionBanner.className = `decision-banner ${isDent ? "dent" : "crack"}`;
+      if (resDecisionTitle) resDecisionTitle.textContent = "STRUCTURAL DEFECT CONFIRMED";
+      if (resDecisionLabel) resDecisionLabel.textContent = isDent ? "SURFACE DENT" : "FATIGUE CRACK";
+      if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
+
+      renderScoreBars(data);
+    }
+
+    if (resSafetyDisclaimer) resSafetyDisclaimer.textContent = data.disclaimer;
+  }
+
+  function renderScoreBars(data) {
+    if (resScoresBlock) resScoresBlock.style.display = "block";
+    if (resDomainBlock) resDomainBlock.style.display = "none";
+
+    const dentPct = (data.raw_dent_score * 100).toFixed(2);
+    const crackPct = (data.raw_crack_score * 100).toFixed(2);
+
+    if (valScoreDent) valScoreDent.textContent = `${dentPct}%`;
+    if (barScoreDent) barScoreDent.style.width = `${dentPct}%`;
+
+    if (valScoreCrack) valScoreCrack.textContent = `${crackPct}%`;
+    if (barScoreCrack) barScoreCrack.style.width = `${crackPct}%`;
+
+    if (telPipelineStatus) telPipelineStatus.textContent = "VERIFIED";
+    if (telConfidenceType) telConfidenceType.textContent = "Raw Sigmoid Activation";
+    if (telDecisionMargin) telDecisionMargin.textContent = `\u00B1 ${data.margin_from_decision?.toFixed(4) || "0.0000"}`;
+    if (telPreprocessing) telPreprocessing.textContent = "224\u00D7224 RGB, 1./255";
+  }
+
+  // =========================================================================
+  // Module B: Captioning & Summary (BLIP)
+  // =========================================================================
+  captionDropzone?.addEventListener("click", () => {
+    if (!captionPreviewContainer || captionPreviewContainer.style.display === "none") {
+      captionFileInput?.click();
+    }
+  });
+
+  captionFileInput?.addEventListener("change", (e) => {
+    if (e.target.files?.[0]) handleCaptionFile(e.target.files[0]);
+  });
+
+  function handleCaptionFile(file) {
+    currentCaptionBlob = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (captionPreviewImg && captionPreviewContainer && captionDropzoneContent) {
+        captionPreviewImg.src = e.target.result;
+        captionPreviewContainer.style.display = "flex";
+        captionDropzoneContent.style.display = "none";
+        btnRunCaption.disabled = false;
+        btnRunSummary.disabled = false;
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  btnRemoveCaptionImg?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    currentCaptionBlob = null;
+    if (captionPreviewContainer) captionPreviewContainer.style.display = "none";
+    if (captionDropzoneContent) captionDropzoneContent.style.display = "block";
+    if (captionFileInput) captionFileInput.value = "";
+    if (btnRunCaption) btnRunCaption.disabled = true;
+    if (btnRunSummary) btnRunSummary.disabled = true;
+    if (captionEmptyState) captionEmptyState.style.display = "block";
+    if (captionResultsContent) captionResultsContent.style.display = "none";
+  });
+
+  document.querySelectorAll(".example-buttons .example-btn[id^='btn-caption-sample']").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const fileName = btn.dataset.file;
+      try {
+        const res = await fetch(`/api/examples/${fileName}`);
+        if (!res.ok) throw new Error("Sample file not found on server");
+        const blob = await res.blob();
+        handleCaptionFile(new File([blob], fileName, { type: "image/jpeg" }));
+      } catch (err) {
+        showAlert(`Failed to load BLIP benchmark image: ${err.message}`, "error");
+      }
+    });
+  });
+
   btnRunCaption?.addEventListener("click", async () => {
-    if (!selectedCaptionBlob || isCaptioning) return;
-    isCaptioning = true;
+    if (!currentCaptionBlob) return;
     btnRunCaption.disabled = true;
-    captionSpinner.style.display = "inline-block";
+    if (captionSpinner) captionSpinner.style.display = "inline-block";
+    if (captionEmptyState) captionEmptyState.style.display = "none";
+    if (captionResultsContent) captionResultsContent.style.display = "block";
 
     const formData = new FormData();
-    formData.append("file", selectedCaptionBlob);
+    formData.append("file", currentCaptionBlob);
 
     try {
-      const res = await fetch("/api/caption", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Captioning failed");
-      }
-
+      const res = await fetch("/api/caption", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Caption generation request failed");
       const data = await res.json();
-      document.getElementById("caption-empty-state").style.display = "none";
-      document.getElementById("caption-output-box").style.display = "flex";
-      document.getElementById("blip-caption-text").textContent = `"${data.raw_generated_text}"`;
+      if (blipCaptionOutput) blipCaptionOutput.textContent = `"${data.raw_generated_text}"`;
     } catch (err) {
-      showAlert(`BLIP Caption Error: ${err.message}`);
+      if (blipCaptionOutput) blipCaptionOutput.textContent = `Error: ${err.message}`;
     } finally {
-      isCaptioning = false;
       btnRunCaption.disabled = false;
-      captionSpinner.style.display = "none";
+      if (captionSpinner) captionSpinner.style.display = "none";
     }
   });
 
-  // Run BLIP Summary
   btnRunSummary?.addEventListener("click", async () => {
-    if (!selectedCaptionBlob || isSummarizing) return;
-    isSummarizing = true;
+    if (!currentCaptionBlob) return;
     btnRunSummary.disabled = true;
-    summarySpinner.style.display = "inline-block";
+    if (summarySpinner) summarySpinner.style.display = "inline-block";
+    if (captionEmptyState) captionEmptyState.style.display = "none";
+    if (captionResultsContent) captionResultsContent.style.display = "block";
 
     const formData = new FormData();
-    formData.append("file", selectedCaptionBlob);
+    formData.append("file", currentCaptionBlob);
 
     try {
-      const res = await fetch("/api/summary", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Summarization failed");
-      }
-
+      const res = await fetch("/api/summary", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Summary generation request failed");
       const data = await res.json();
-      document.getElementById("caption-empty-state").style.display = "none";
-      document.getElementById("caption-output-box").style.display = "flex";
-      document.getElementById("blip-summary-text").textContent = `"${data.raw_generated_text}"`;
+      if (blipSummaryOutput) blipSummaryOutput.textContent = `"${data.raw_generated_text}"`;
     } catch (err) {
-      showAlert(`BLIP Summary Error: ${err.message}`);
+      if (blipSummaryOutput) blipSummaryOutput.textContent = `Error: ${err.message}`;
     } finally {
-      isSummarizing = false;
       btnRunSummary.disabled = false;
-      summarySpinner.style.display = "none";
+      if (summarySpinner) summarySpinner.style.display = "none";
     }
   });
-
-  // 5. Load Evaluation & Metrics
-  async function loadEvaluationData() {
-    try {
-      const res = await fetch("/api/evaluation");
-      if (!res.ok) return;
-      const data = await res.json();
-      const full = data.full_supplementary_evaluation;
-      if (full) {
-        document.getElementById("kpi-full-acc").textContent = `${(full.test_accuracy * 100).toFixed(1)}%`;
-        document.getElementById("kpi-full-loss").textContent = full.test_loss.toFixed(4);
-        document.getElementById("kpi-full-samples").textContent = `Total Samples: ${full.full_samples_count}`;
-
-        const dentM = full.positive_class_dent_metrics;
-        if (dentM) {
-          document.getElementById("kpi-dent-f1").textContent = dentM.f1_score.toFixed(4);
-          document.getElementById("kpi-dent-prec-rec").textContent = `Prec: ${dentM.precision.toFixed(2)} | Rec: ${dentM.recall.toFixed(2)}`;
-        }
-
-        const crackM = full.negative_class_crack_metrics;
-        if (crackM) {
-          document.getElementById("kpi-crack-f1").textContent = crackM.f1_score.toFixed(4);
-          document.getElementById("kpi-crack-prec-rec").textContent = `Prec: ${crackM.precision.toFixed(2)} | Rec: ${crackM.recall.toFixed(2)}`;
-        }
-      }
-    } catch (err) {
-      console.warn("Evaluation artifacts not yet generated:", err);
-    }
-  }
-
-  // 6. Load Dataset & Leakage Info
-  async function loadDatasetInfo() {
-    try {
-      const res = await fetch("/api/dataset/info");
-      if (!res.ok) return;
-      const data = await res.json();
-
-      const tbody = document.getElementById("dataset-table-body");
-      if (tbody && data.splits_summary) {
-        tbody.innerHTML = "";
-        for (const [split, counts] of Object.entries(data.splits_summary)) {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td><strong>${split.toUpperCase()}</strong></td>
-            <td>${counts.crack}</td>
-            <td>${counts.dent}</td>
-            <td><strong>${counts.total}</strong></td>
-          `;
-          tbody.appendChild(row);
-        }
-      }
-
-      if (data.leakage_analysis) {
-        const baseCount = data.leakage_analysis.roboflow_base_id_overlaps_count ?? 0;
-        const exactCount = data.leakage_analysis.cross_split_exact_duplicates_count ?? 0;
-        document.getElementById("leakage-base-count").textContent = baseCount;
-        document.getElementById("leakage-exact-count").textContent = exactCount;
-      }
-    } catch (err) {
-      console.warn("Dataset report not yet generated:", err);
-    }
-  }
-
-  // Initial runs
-  checkSystemHealth();
-  loadEvaluationData();
-  loadDatasetInfo();
 });

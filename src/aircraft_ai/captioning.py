@@ -77,22 +77,19 @@ def describe_image(
             if not path_obj.exists():
                 raise FileNotFoundError(f"Image file does not exist: {path_obj}")
             img = Image.open(str(path_obj))
+            img.verify()
+            img = Image.open(str(path_obj))
         elif isinstance(image_input, bytes):
             img = Image.open(io.BytesIO(image_input))
+            img.verify()
+            img = Image.open(io.BytesIO(image_input))
         elif isinstance(image_input, Image.Image):
-            img = image_input
+            img = image_input.copy()
         else:
             raise ValueError(f"Unsupported image input type: {type(image_input)}")
 
-        img.verify()
-
-        # Reopen after verify
-        if isinstance(image_input, (str, Path)):
-            img = Image.open(str(image_input))
-        elif isinstance(image_input, bytes):
-            img = Image.open(io.BytesIO(image_input))
-
-        img = img.convert("RGB")
+        if img.mode != "RGB":
+            img = img.convert("RGB")
     except Exception as e:
         if isinstance(e, FileNotFoundError):
             raise
