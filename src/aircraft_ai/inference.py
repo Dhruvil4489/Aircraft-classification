@@ -1,6 +1,9 @@
 """Inference module for aircraft damage classification with strict preprocessing parity."""
 
 import io
+import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
@@ -159,13 +162,20 @@ def analyze_image(
     Stage 2: Semantic aircraft-image relevance screening (CLIP zero-shot).
     Stage 3: Damage classification (VGG16 baseline, executed only if domain-accepted).
     Stage 4: Confidence scoring and uncertainty evaluation.
+    Stage 5: Visual damage explainability via Grad-CAM (block5_conv3).
     """
+    start_time = time.perf_counter()
+    inspection_id = f"INS-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+    timestamp_iso = datetime.now(timezone.utc).isoformat()
+
     from aircraft_ai.domain_screening import screen_image_domain
+    from aircraft_ai.gradcam import compute_gradcam
 
     # Stage 2: Domain Relevance Screening
     domain_res = screen_image_domain(image_input, threshold=domain_threshold)
 
     if not domain_res["is_aircraft_domain"]:
+        duration_ms = round((time.perf_counter() - start_time) * 1000, 1)
         logger.warning(
             "Rejected out-of-domain image: matched '%s' (in_domain_score=%.4f < %.2f)",
             domain_res["matched_category"],
@@ -173,14 +183,23 @@ def analyze_image(
             domain_threshold,
         )
         return {
+            "inspection_id": inspection_id,
+            "timestamp": timestamp_iso,
             "status": config.STATUS_UNSUPPORTED,
             "is_supported": False,
             "predicted_class": None,
             "predicted_class_id": None,
+            "model_score": None,
+            "score_type": "CLIP Zero-Shot Screening",
+            "class_scores": None,
             "decision_message": (
                 f"Unsupported image — this image could not be verified as an aircraft inspection image "
                 f"({domain_res['matched_category']}). No damage classification was performed. "
                 "Please upload a relevant aircraft surface photograph."
+            ),
+            "recommended_action": (
+                "Upload a clear, properly illuminated close-up photograph of an aircraft structural metallic "
+                "or composite panel. Non-aircraft images are rejected to avoid erroneous classification."
             ),
             "raw_dent_score": None,
             "raw_crack_score": None,
@@ -188,9 +207,16 @@ def analyze_image(
             "confidence_label": "Domain Rejection Confidence",
             "threshold": classification_threshold,
             "uncertainty_margin": uncertainty_margin,
+            "uncertainty_status": "out_of_domain",
+            "margin_from_decision": None,
             "domain_screening": domain_res,
+            "localization": {
+                "available": False,
+                "reason": "Classification and localization bypassed for out-of-domain imagery.",
+            },
             "model_version": "VGG16-AeroDamage-v1.0 (ImageNet frozen)",
             "preprocessing": "Domain validation executed prior to VGG16 input",
+            "processing_time_ms": duration_ms,
             "disclaimer": config.SAFETY_DISCLAIMER,
         }
 
@@ -212,29 +238,71 @@ def analyze_image(
             f"(P(dent)={dent_score:.4f}, margin={margin_from_decision:.4f} < {uncertainty_margin:.2f}). "
             "The model cannot confidently distinguish dent from crack. Manual inspection is recommended."
         )
+        recommended_action = (
+            "Model score is in the ambiguity band (|P(dent) - 0.50| < 0.12). Do NOT rely on automated "
+            "classification. Conduct General Visual Inspection (GVI) and Detailed Inspection (DET) "
+            "under 10x magnification with oblique lighting per NDT manual."
+        )
+        uncertainty_status = "low_decision_margin"
+        target_gradcam_class = "dent" if dent_score >= 0.5 else "crack"
     else:
         status = config.STATUS_COMPLETED
         predicted_class = class_res["predicted_class"]
         predicted_class_id = class_res["predicted_class_id"]
         decision_message = f"Defect classified as {predicted_class.upper()} based on structural visual features."
+        uncertainty_status = "confident_prediction"
+        target_gradcam_class = predicted_class
+        if predicted_class == "crack":
+            recommended_action = (
+                "CRITICAL: Suspected fatigue crack discontinuity detected. Immediately tag component and restrict "
+                "from service pending Non-Destructive Testing (High-Frequency Eddy Current / Ultrasonic Inspection per "
+                "SRM Chapter 51) to verify crack length and tip arrest."
+            )
+        else:
+            recommended_action = (
+                "Log dent depth and diameter with depth micrometer. Check proximity to nearest frame, stringer, or rivet "
+                "line in accordance with Structural Repair Manual (SRM) Chapter 51 / 53 allowable damage limits. "
+                "Schedule NDT verification."
+            )
+
+    # Stage 5: Visual Damage Explainability (Grad-CAM on block5_conv3)
+    localization = compute_gradcam(
+        image_input,
+        target_class=target_gradcam_class,
+        model=active_model,
+    )
+
+    duration_ms = round((time.perf_counter() - start_time) * 1000, 1)
 
     return {
+        "inspection_id": inspection_id,
+        "timestamp": timestamp_iso,
         "status": status,
         "is_supported": True,
         "predicted_class": predicted_class,
         "predicted_class_id": predicted_class_id,
+        "model_score": round(dent_score if predicted_class == "dent" else crack_score, 4),
+        "score_type": "Uncalibrated Sigmoid Activation",
+        "class_scores": {
+            "dent": round(dent_score, 4),
+            "crack": round(crack_score, 4),
+        },
         "decision_message": decision_message,
+        "recommended_action": recommended_action,
         "raw_dent_score": dent_score,
         "raw_crack_score": crack_score,
         "confidence": class_res["confidence"],
         "confidence_label": "Model Score (Uncalibrated Sigmoid Output)",
         "threshold": classification_threshold,
         "uncertainty_margin": uncertainty_margin,
+        "uncertainty_status": uncertainty_status,
         "margin_from_decision": round(margin_from_decision, 4),
         "domain_screening": domain_res,
+        "localization": localization,
         "class_indices": config.CLASS_INDICES,
         "model_version": "VGG16-AeroDamage-v1.0 (ImageNet frozen)",
         "preprocessing": f"{config.IMG_ROWS}x{config.IMG_COLS} RGB, bilinear resize, scaled 1./255",
+        "processing_time_ms": duration_ms,
         "disclaimer": config.SAFETY_DISCLAIMER,
     }
 

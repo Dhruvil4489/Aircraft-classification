@@ -305,6 +305,7 @@ EXAMPLE_IMAGES = {
     "dent_example_1.jpg": config.TEST_DIR / "dent" / "144_10_JPG_jpg.rf.4d008cc33e217c1606b76585469d626b.jpg",
     "dent_example_2.jpg": config.TEST_DIR / "dent" / "149_22_JPG_jpg.rf.4899cbb6f4aad9588fa3811bb886c34d.jpg",
     "crack_example_1.jpg": config.TEST_DIR / "crack" / "18_2_JPG_jpg.rf.7f3408a0d0cbfa78c80adfe6635c91a6.jpg",
+    "crack_example_2.jpg": config.TEST_DIR / "crack" / "101_1_JPG_jpg.rf.695bc0b3ba5ada38ee27d71dbacaf408.jpg",
     "task9_task10_image.jpg": config.TEST_DIR / "dent" / "149_22_JPG_jpg.rf.4899cbb6f4aad9588fa3811bb886c34d.jpg",
     "144_10_image.jpg": config.TEST_DIR / "dent" / "144_10_JPG_jpg.rf.4d008cc33e217c1606b76585469d626b.jpg",
 }
@@ -336,6 +337,155 @@ def get_example_image(name: str):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset example image file not extracted.")
 
     return FileResponse(str(target_path), media_type="image/jpeg")
+
+
+@app.post("/api/inspection/report/html")
+async def generate_inspection_report_html(data: Dict[str, Any]):
+    """Generate a printable HTML aerospace Non-Destructive Inspection (NDI) report document."""
+    from fastapi.responses import HTMLResponse
+
+    inspection_id = data.get("inspection_id", "INS-UNKNOWN")
+    timestamp = data.get("timestamp", "N/A")
+    status_code = data.get("status", "N/A")
+    pred_class = (data.get("predicted_class") or "UNKNOWN").upper()
+    model_score = data.get("model_score")
+    score_display = f"{float(model_score) * 100:.2f}%" if model_score is not None else "N/A"
+    recommended_action = data.get("recommended_action", "Conduct manual visual inspection.")
+    decision_message = data.get("decision_message", "")
+    processing_time = data.get("processing_time_ms", 0)
+    loc = data.get("localization") or {}
+    overlay_b64 = loc.get("overlay_data_url", "")
+    heatmap_b64 = loc.get("heatmap_data_url", "")
+    disclaimer = data.get("disclaimer", config.SAFETY_DISCLAIMER)
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AeroDamage AI — Inspection Record {inspection_id}</title>
+  <style>
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      margin: 40px;
+      line-height: 1.5;
+    }}
+    .header {{
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }}
+    .title {{ font-size: 20px; font-weight: 700; color: #0f172a; }}
+    .subtitle {{ font-size: 13px; color: #64748b; margin-top: 2px; }}
+    .ref-block {{ text-align: right; font-size: 13px; font-family: monospace; }}
+    .status-badge {{
+      display: inline-block;
+      padding: 4px 12px;
+      font-weight: 700;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      background: #f1f5f9;
+      color: #0f172a;
+      border: 1px solid #cbd5e1;
+    }}
+    .status-badge.crack {{ background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }}
+    .status-badge.dent {{ background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }}
+    .status-badge.uncertain {{ background: #fffbeb; color: #b45309; border-color: #fde68a; }}
+    table {{ width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }}
+    th, td {{ padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; }}
+    th {{ background: #f8fafc; font-weight: 600; width: 30%; }}
+    .evidence-grid {{ display: flex; gap: 20px; margin: 20px 0; }}
+    .evidence-card {{ flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; text-align: center; }}
+    .evidence-card img {{ max-width: 100%; height: auto; max-height: 240px; border-radius: 4px; object-fit: contain; }}
+    .evidence-card h4 {{ margin: 0 0 8px 0; font-size: 13px; color: #475569; }}
+    .disclaimer-box {{
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #92400e;
+      margin-top: 24px;
+    }}
+    .signoff-grid {{
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px dashed #cbd5e1;
+      font-size: 13px;
+    }}
+    .signoff-box {{ width: 45%; }}
+    .signoff-line {{ border-bottom: 1px solid #0f172a; margin-top: 40px; }}
+    @media print {{
+      body {{ margin: 20px; }}
+      button {{ display: none; }}
+    }}
+  </style>
+</head>
+<body>
+  <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+    <button onclick="window.print()" style="padding: 8px 16px; font-weight: 600; cursor: pointer; background: #2563eb; color: #fff; border: none; border-radius: 4px;">Print / Save as PDF</button>
+  </div>
+  <div class="header">
+    <div>
+      <div class="title">AERODAMAGE AI — STRUCTURAL INSPECTION RECORD</div>
+      <div class="subtitle">AI-Assisted Aerospace Non-Destructive Visual Inspection Document</div>
+    </div>
+    <div class="ref-block">
+      <div><strong>Record ID:</strong> {inspection_id}</div>
+      <div><strong>Date:</strong> {timestamp}</div>
+      <div><strong>ATA Spec:</strong> Chapter 51 / 53</div>
+    </div>
+  </div>
+
+  <div class="status-badge {pred_class.lower()}">INSPECTION STATUS: {status_code} — {pred_class}</div>
+
+  <table>
+    <tr><th>Predicted Defect Class</th><td><strong>{pred_class}</strong></td></tr>
+    <tr><th>Model Score</th><td>{score_display} (Uncalibrated Sigmoid Output, Threshold = 0.50)</td></tr>
+    <tr><th>Diagnostic Finding</th><td>{decision_message}</td></tr>
+    <tr><th>Recommended Operational Action</th><td><strong>{recommended_action}</strong></td></tr>
+    <tr><th>Inference Duration</th><td>{processing_time} ms</td></tr>
+    <tr><th>Model Architecture</th><td>VGG16 (ImageNet Backbone Frozen) + Binary Classification Head</td></tr>
+  </table>
+
+  <h3>Visual Explainability Evidence (Grad-CAM Attention)</h3>
+  <div class="evidence-grid">
+    <div class="evidence-card">
+      <h4>Grad-CAM Attention Heatmap</h4>
+      {f'<img src="{heatmap_b64}" alt="Grad-CAM Heatmap">' if heatmap_b64 else '<p>Not generated</p>'}
+    </div>
+    <div class="evidence-card">
+      <h4>Blended Panel Overlay</h4>
+      {f'<img src="{overlay_b64}" alt="Blended Overlay">' if overlay_b64 else '<p>Not generated</p>'}
+    </div>
+  </div>
+
+  <div class="disclaimer-box">
+    <strong>OPERATIONAL LIMITATION & SAFETY NOTICE:</strong><br>
+    {disclaimer}<br>
+    This automated inspection record is an AI-assisted decision support artifact. It does NOT constitute a certified airworthiness approval, return-to-service authorization, or certified NDT sign-off. Defect verification and repair disposition must be conducted by a licensed A&P / Part 66 aircraft maintenance engineer.
+  </div>
+
+  <div class="signoff-grid">
+    <div class="signoff-box">
+      <div><strong>NDT Level II/III Technician:</strong></div>
+      <div class="signoff-line"></div>
+      <div style="margin-top: 4px; font-size: 11px; color: #64748b;">Signature / Stamp / Date</div>
+    </div>
+    <div class="signoff-box">
+      <div><strong>Quality Assurance / Lead Inspector:</strong></div>
+      <div class="signoff-line"></div>
+      <div style="margin-top: 4px; font-size: 11px; color: #64748b;">Signature / Stamp / Date</div>
+    </div>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html_content)
+
 
 
 # Mount static frontend directory

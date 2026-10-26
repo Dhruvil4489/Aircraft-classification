@@ -52,6 +52,15 @@ def test_analyze_image_accepts_aircraft(real_dent_bytes):
     assert res["raw_dent_score"] is not None
     assert res["raw_crack_score"] is not None
     assert res["domain_screening"]["is_aircraft_domain"] is True
+    # Verify new schema fields
+    assert "inspection_id" in res
+    assert res["inspection_id"].startswith("INS-")
+    assert "processing_time_ms" in res
+    assert res["processing_time_ms"] > 0
+    assert "recommended_action" in res
+    assert "localization" in res
+    assert res["localization"]["available"] is True
+    assert res["localization"]["heatmap_data_url"].startswith("data:image/png;base64,")
 
 
 def test_api_analyze_endpoint_signature_rejection(client, signature_bytes):
@@ -65,6 +74,55 @@ def test_api_analyze_endpoint_signature_rejection(client, signature_bytes):
     assert data["status"] == config.STATUS_UNSUPPORTED
     assert data["is_supported"] is False
     assert data["predicted_class"] is None
+    assert "recommended_action" in data
+
+
+def test_api_analyze_corrupt_image(client):
+    """Verify POST /api/analyze returns 400 for corrupted image upload."""
+    response = client.post(
+        "/api/analyze",
+        files={"file": ("corrupt.jpg", b"not_an_image_file_content", "image/jpeg")},
+    )
+    assert response.status_code == 400
+    assert "Invalid or corrupted image" in response.json()["detail"]
+
+
+def test_api_inspection_report_html_generation(client):
+    """Verify POST /api/inspection/report/html produces a printable HTML report."""
+    payload = {
+        "inspection_id": "INS-TEST-123",
+        "timestamp": "2026-10-25T20:00:00Z",
+        "status": "COMPLETED",
+        "predicted_class": "dent",
+        "model_score": 0.8842,
+        "decision_message": "Defect classified as DENT based on structural visual features.",
+        "recommended_action": "Log dent depth per SRM Chapter 51.",
+        "processing_time_ms": 120.5,
+        "localization": {
+            "heatmap_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+            "overlay_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        },
+    }
+    response = client.post("/api/inspection/report/html", json=payload)
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    html_text = response.text
+    assert "INS-TEST-123" in html_text
+    assert "DENT" in html_text
+    assert "AERODAMAGE AI" in html_text
+
+
+def test_api_benchmark_examples(client):
+    """Verify GET /api/examples returns benchmark images including crack_example_2."""
+    response = client.get("/api/examples")
+    assert response.status_code == 200
+    examples = response.json()["examples"]
+    assert "dent_example_1.jpg" in examples
+    assert "crack_example_2.jpg" in examples
+
+    img_res = client.get("/api/examples/crack_example_2.jpg")
+    assert img_res.status_code == 200
+    assert img_res.headers["content-type"] == "image/jpeg"
 
 
 def test_api_model_status_and_info(client):
@@ -81,3 +139,4 @@ def test_api_model_status_and_info(client):
     assert info_data["backbone"]["name"] == "VGG16"
     assert info_data["class_mapping"] == {"crack": 0, "dent": 1}
     assert info_data["threshold"] == 0.5
+

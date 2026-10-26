@@ -169,27 +169,26 @@ Open **`http://127.0.0.1:8000`** in any modern web browser to access the interac
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/health` | System health check and model loading state |
+| `GET` | `/api/model/status` | Model training status, backbone, and runtime hardware info |
+| `GET` | `/api/model/info` | Complete academic and production architectural specifications |
 | `GET` | `/api/class-mapping` | Class mapping `{"crack": 0, "dent": 1}` and threshold |
 | `GET` | `/api/dataset/info` | Reads `artifacts/results/dataset_report.json` |
-| `POST` | `/api/classify` | Multipart image upload; returns real VGG16 prediction |
-| `POST` | `/api/caption` | Multipart image upload; returns real BLIP caption |
-| `POST` | `/api/summary` | Multipart image upload; returns prompt-conditioned summary |
+| `POST` | `/api/analyze` | Multi-stage inspection: CLIP domain screening, VGG16 classification, Grad-CAM attention mapping, and SRM operational guidance |
+| `POST` | `/api/classify` | Alias to `/api/analyze` |
+| `POST` | `/api/inspection/report/html` | Generates a printable aerospace Non-Destructive Inspection (NDI) report document |
+| `POST` | `/api/caption` | Multipart image upload; returns prompt-conditioned BLIP caption |
+| `POST` | `/api/summary` | Multipart image upload; returns detailed BLIP summary |
 | `GET` | `/api/evaluation` | Returns `history.json` and `metrics.json` |
 | `GET` | `/api/examples` | Lists allow-listed test benchmark images |
+| `GET` | `/api/examples/{name}` | Serves allow-listed test benchmark JPEG file |
 | `GET` | `/api/results/figures/{name}` | Serves allow-listed evaluation PNG figures |
 
 ---
 
 ## 8. Test Suite Execution
-Run the automated pytest test suite:
+Run the automated pytest test suite (39 comprehensive unit & integration tests):
 ```powershell
-# Run fast unit tests (no weights download required)
-python -m pytest -m fast -v
-
-# Run integration tests (real weights and BLIP)
-python -m pytest -m slow -v
-
-# Run entire test suite
+# Run entire test suite (39 tests covering inference, Grad-CAM, API, data, CLIP, BLIP)
 python -m pytest -v
 ```
 

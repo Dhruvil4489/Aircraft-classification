@@ -1,6 +1,7 @@
 /**
  * AeroDamage AI — Aerospace Engineering Workstation Client Application
- * Handles state management, multi-stage inspection telemetry, and API integration.
+ * Handles state management, Grad-CAM visual evidence inspection,
+ * operational defect reporting, and API integration.
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -35,11 +36,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const analysisSpinner = document.getElementById("analysis-spinner");
   const analysisBtnText = document.getElementById("analysis-btn-text");
 
-  // Pipeline stage indicators
-  const stepValidation = document.getElementById("step-validation");
-  const stepScreening = document.getElementById("step-screening");
-  const stepClassifier = document.getElementById("step-classifier");
-  const stepUncertainty = document.getElementById("step-uncertainty");
+  // Evidence View Switcher elements
+  const viewModeButtons = document.querySelectorAll(".view-mode-btn");
+  const btnViewOrig = document.getElementById("btn-view-orig");
+  const btnViewOverlay = document.getElementById("btn-view-overlay");
+  const btnViewHeatmap = document.getElementById("btn-view-heatmap");
+  const overlaySliderRow = document.getElementById("overlay-slider-row");
+  const overlayOpacitySlider = document.getElementById("overlay-opacity");
+  const opacityValLabel = document.getElementById("opacity-val");
+  const viewModeCaption = document.getElementById("view-mode-caption");
 
   // Analysis result elements
   const analysisEmptyState = document.getElementById("analysis-empty-state");
@@ -53,15 +58,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const barScoreDent = document.getElementById("bar-score-dent");
   const valScoreCrack = document.getElementById("val-score-crack");
   const barScoreCrack = document.getElementById("bar-score-crack");
-  const resDomainBlock = document.getElementById("res-domain-block");
-  const valDomainScore = document.getElementById("val-domain-score");
-  const barDomainScore = document.getElementById("bar-domain-score");
-  const resMatchedCategory = document.getElementById("res-matched-category");
-  const telPipelineStatus = document.getElementById("tel-pipeline-status");
-  const telConfidenceType = document.getElementById("tel-confidence-type");
+  const resEvidenceCard = document.getElementById("res-evidence-card");
+  const resEvidenceText = document.getElementById("res-evidence-text");
+  const resActionBox = document.getElementById("res-action-box");
+  const resRecommendedAction = document.getElementById("res-recommended-action");
+  const btnExportReport = document.getElementById("btn-export-report");
+  const btnExportJson = document.getElementById("btn-export-json");
+
+  // Telemetry items inside collapsible details
+  const telInspectionId = document.getElementById("tel-inspection-id");
+  const telProcessingTime = document.getElementById("tel-processing-time");
+  const telClipScore = document.getElementById("tel-clip-score");
   const telDecisionMargin = document.getElementById("tel-decision-margin");
   const telPreprocessing = document.getElementById("tel-preprocessing");
+  const telModelVersion = document.getElementById("tel-model-version");
   const resSafetyDisclaimer = document.getElementById("res-safety-disclaimer");
+
+  // History elements
+  const historyTbody = document.getElementById("history-tbody");
+  const historyCountBadge = document.getElementById("history-count-badge");
 
   // Captioning elements
   const captionDropzone = document.getElementById("caption-dropzone");
@@ -79,10 +94,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const blipCaptionOutput = document.getElementById("blip-caption-output");
   const blipSummaryOutput = document.getElementById("blip-summary-output");
 
-  // State
+  // Application State
   let currentAnalysisBlob = null;
+  let currentAnalysisFilename = "";
+  let currentOriginalDataUrl = "";
+  let currentOverlayDataUrl = "";
+  let currentHeatmapDataUrl = "";
+  let currentInspectionResult = null;
   let currentCaptionBlob = null;
   let isAnalyzing = false;
+  let inspectionHistory = [];
+
+  try {
+    const stored = sessionStorage.getItem("aerodamage_inspections");
+    if (stored) {
+      inspectionHistory = JSON.parse(stored);
+    }
+  } catch (e) {
+    inspectionHistory = [];
+  }
 
   // =========================================================================
   // Navigation & Tabs
@@ -125,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
   btnCloseAlert?.addEventListener("click", hideAlert);
 
   // =========================================================================
-  // Live Telemetry Initialization
+  // System Telemetry & Evaluation Initialization
   // =========================================================================
   async function initSystemTelemetry() {
     try {
@@ -136,7 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (data.model_trained) {
         statusDot?.classList.add("online");
         statusDot?.classList.remove("offline");
-        if (statusLabel) statusLabel.textContent = "Telemetry Online — VGG16 & CLIP Active";
+        if (statusLabel) statusLabel.textContent = "System Operational";
         const kpiClassifier = document.getElementById("kpi-classifier-status");
         if (kpiClassifier) kpiClassifier.textContent = "Ready (v1.0)";
       } else {
@@ -146,19 +176,24 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch (err) {
       statusDot?.classList.add("offline");
-      if (statusLabel) statusLabel.textContent = "Telemetry Disconnected";
+      if (statusLabel) statusLabel.textContent = "Service Disconnected";
     }
 
-    // Load evaluation metrics
+    // Load evaluation metrics into Overview & Performance tabs
     try {
       const evalRes = await fetch("/api/evaluation");
       if (evalRes.ok) {
         const evalData = await evalRes.json();
         const full = evalData.full_supplementary_evaluation || {};
-        
+
         const kpiAcc = document.getElementById("kpi-eval-acc");
         if (kpiAcc && full.test_accuracy !== undefined) {
           kpiAcc.textContent = `${(full.test_accuracy * 100).toFixed(1)}%`;
+        }
+
+        const kpiOverviewAcc = document.getElementById("kpi-test-accuracy");
+        if (kpiOverviewAcc && full.test_accuracy !== undefined) {
+          kpiOverviewAcc.textContent = `${(full.test_accuracy * 100).toFixed(1)}%`;
         }
 
         const kpiLoss = document.getElementById("kpi-eval-loss");
@@ -181,6 +216,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) {
       console.warn("Evaluation metrics fetch failed:", e);
     }
+
+    renderHistoryTable();
   }
 
   initSystemTelemetry();
@@ -188,7 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // =========================================================================
   // Damage Analysis Viewport Handlers
   // =========================================================================
-  analysisDropzone?.addEventListener("click", (e) => {
+  analysisDropzone?.addEventListener("click", () => {
     if (!analysisPreviewContainer || analysisPreviewContainer.style.display === "none") {
       analysisFileInput?.click();
     }
@@ -222,26 +259,42 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  function clearAnalysisResult() {
+    currentInspectionResult = null;
+    currentOverlayDataUrl = "";
+    currentHeatmapDataUrl = "";
+    if (analysisEmptyState) analysisEmptyState.style.display = "block";
+    if (analysisResultsContent) analysisResultsContent.style.display = "none";
+    if (btnViewOverlay) btnViewOverlay.disabled = true;
+    if (btnViewHeatmap) btnViewHeatmap.disabled = true;
+    if (overlaySliderRow) overlaySliderRow.style.display = "none";
+    setActiveViewMode("original");
+  }
+
   function handleAnalysisFile(file) {
     if (!file.type.match(/^image\/(jpeg|png|webp)$/i) && !file.name.match(/\.(jpe?g|png|webp)$/i)) {
-      showAlert("Unsupported file format. Please upload a valid JPEG, PNG, or WebP image.", "error");
+      showAlert("Unsupported file format. Please upload a valid JPEG, PNG, or WebP image.", "crimson");
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      showAlert("Upload exceeds 10 MB limit. Please select a smaller file.", "error");
+      showAlert("Upload exceeds 10 MB limit. Please select a smaller file.", "crimson");
       return;
     }
 
     hideAlert();
+    clearAnalysisResult();
+
     currentAnalysisBlob = file;
+    currentAnalysisFilename = file.name || "inspection_image.jpg";
 
     const reader = new FileReader();
     reader.onload = (e) => {
+      currentOriginalDataUrl = e.target.result;
       if (analysisPreviewImg && analysisPreviewContainer && analysisDropzoneContent) {
-        analysisPreviewImg.src = e.target.result;
-        
-        // Populate natural dimensions once loaded
+        analysisPreviewImg.src = currentOriginalDataUrl;
+        analysisPreviewImg.style.opacity = "1";
+
         analysisPreviewImg.onload = () => {
           if (imgMetaDimensions) {
             imgMetaDimensions.textContent = `${analysisPreviewImg.naturalWidth} \u00D7 ${analysisPreviewImg.naturalHeight} px`;
@@ -260,7 +313,7 @@ document.addEventListener("DOMContentLoaded", () => {
         analysisPreviewContainer.style.display = "flex";
         analysisDropzoneContent.style.display = "none";
         btnRunAnalysis.disabled = false;
-        resetPipelineStages();
+        if (viewModeCaption) viewModeCaption.textContent = "Original inspection panel photograph.";
       }
     };
     reader.readAsDataURL(file);
@@ -269,24 +322,16 @@ document.addEventListener("DOMContentLoaded", () => {
   btnRemoveAnalysisImg?.addEventListener("click", (e) => {
     e.stopPropagation();
     currentAnalysisBlob = null;
+    currentAnalysisFilename = "";
+    currentOriginalDataUrl = "";
     if (analysisPreviewContainer) analysisPreviewContainer.style.display = "none";
     if (analysisDropzoneContent) analysisDropzoneContent.style.display = "block";
     if (analysisFileInput) analysisFileInput.value = "";
     if (btnRunAnalysis) btnRunAnalysis.disabled = true;
-    resetPipelineStages();
-    if (analysisEmptyState) analysisEmptyState.style.display = "block";
-    if (analysisResultsContent) analysisResultsContent.style.display = "none";
+    clearAnalysisResult();
   });
 
-  function resetPipelineStages() {
-    [stepValidation, stepScreening, stepClassifier, stepUncertainty].forEach(step => {
-      if (step) {
-        step.className = "stage-step";
-      }
-    });
-  }
-
-  // Pre-verified Benchmark Sample Buttons
+  // Benchmark Buttons (Test split images)
   document.querySelectorAll(".example-btn[data-file]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -297,68 +342,67 @@ document.addEventListener("DOMContentLoaded", () => {
         const blob = await res.blob();
         handleAnalysisFile(new File([blob], fileName, { type: "image/jpeg" }));
       } catch (err) {
-        showAlert(`Failed to load benchmark sample: ${err.message}`, "error");
+        showAlert(`Failed to load benchmark sample: ${err.message}`, "crimson");
       }
     });
   });
 
-  // Out-of-Domain Signature Fixture Generator Button
-  const btnSampleSignature = document.getElementById("btn-sample-signature");
-  btnSampleSignature?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    // Render high-contrast synthetic handwritten signature fixture on canvas
-    const canvas = document.createElement("canvas");
-    canvas.width = 400;
-    canvas.height = 200;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, 400, 200);
+  // =========================================================================
+  // Evidence View Switcher (Original / Attention Overlay / Grad-CAM Map)
+  // =========================================================================
+  function setActiveViewMode(mode) {
+    viewModeButtons.forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.mode === mode);
+    });
 
-    // Draw cursive ink strokes
-    ctx.strokeStyle = "#001a70";
-    ctx.lineWidth = 3.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(35, 110);
-    ctx.bezierCurveTo(70, 30, 90, 160, 130, 70);
-    ctx.bezierCurveTo(160, 20, 180, 140, 220, 60);
-    ctx.bezierCurveTo(250, 110, 290, 40, 340, 140);
-    ctx.stroke();
+    if (!analysisPreviewImg) return;
 
-    // Underline stroke
-    ctx.beginPath();
-    ctx.moveTo(50, 150);
-    ctx.lineTo(360, 138);
-    ctx.stroke();
+    if (mode === "original") {
+      analysisPreviewImg.src = currentOriginalDataUrl;
+      analysisPreviewImg.style.opacity = "1";
+      if (overlaySliderRow) overlaySliderRow.style.display = "none";
+      if (viewModeCaption) viewModeCaption.textContent = "Original high-resolution panel photograph.";
+    } else if (mode === "overlay") {
+      analysisPreviewImg.src = currentOverlayDataUrl || currentOriginalDataUrl;
+      const opacity = (parseInt(overlayOpacitySlider?.value || "45", 10) / 100);
+      analysisPreviewImg.style.opacity = "1";
+      if (overlaySliderRow) overlaySliderRow.style.display = "flex";
+      if (viewModeCaption) {
+        viewModeCaption.textContent = "Blended explainability overlay (Grad-CAM attention mapped onto panel surface).";
+      }
+    } else if (mode === "heatmap") {
+      analysisPreviewImg.src = currentHeatmapDataUrl || currentOriginalDataUrl;
+      analysisPreviewImg.style.opacity = "1";
+      if (overlaySliderRow) overlaySliderRow.style.display = "none";
+      if (viewModeCaption) {
+        viewModeCaption.textContent = "Grad-CAM attention activation heatmap (block5_conv3 convolutional features).";
+      }
+    }
+  }
 
-    canvas.toBlob((blob) => {
-      handleAnalysisFile(new File([blob], "handwritten_signature_ood_fixture.png", { type: "image/png" }));
-    }, "image/png");
+  btnViewOrig?.addEventListener("click", () => setActiveViewMode("original"));
+  btnViewOverlay?.addEventListener("click", () => setActiveViewMode("overlay"));
+  btnViewHeatmap?.addEventListener("click", () => setActiveViewMode("heatmap"));
+
+  overlayOpacitySlider?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if (opacityValLabel) opacityValLabel.textContent = `${val}%`;
   });
 
   // =========================================================================
-  // Execute 4-Stage Inspection Pipeline
+  // Execute Inspection Pipeline
   // =========================================================================
   btnRunAnalysis?.addEventListener("click", async () => {
     if (!currentAnalysisBlob || isAnalyzing) return;
     isAnalyzing = true;
     btnRunAnalysis.disabled = true;
     if (analysisSpinner) analysisSpinner.style.display = "inline-block";
-    if (analysisBtnText) analysisBtnText.textContent = "Executing 4-Stage Pipeline...";
-
-    // Stage 1: File check active
-    resetPipelineStages();
-    if (stepValidation) stepValidation.className = "stage-step active";
+    if (analysisBtnText) analysisBtnText.textContent = "Analyzing Panel Image...";
 
     const formData = new FormData();
     formData.append("file", currentAnalysisBlob);
 
     try {
-      // Transition to Stage 2: Domain Screening
-      if (stepValidation) stepValidation.className = "stage-step success";
-      if (stepScreening) stepScreening.className = "stage-step active";
-
       const res = await fetch("/api/analyze", {
         method: "POST",
         body: formData,
@@ -370,15 +414,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const data = await res.json();
+      currentInspectionResult = data;
       displayAnalysisResult(data);
+      saveInspectionToHistory(data);
     } catch (err) {
-      showAlert(`Pipeline Execution Failure: ${err.message}`, "error");
-      if (stepScreening) stepScreening.className = "stage-step rejected";
+      showAlert(`Inspection Pipeline Failure: ${err.message}`, "crimson");
     } finally {
       isAnalyzing = false;
       btnRunAnalysis.disabled = false;
       if (analysisSpinner) analysisSpinner.style.display = "none";
-      if (analysisBtnText) analysisBtnText.textContent = "Execute 4-Stage Inspection Pipeline";
+      if (analysisBtnText) analysisBtnText.textContent = "Analyze Inspection Image";
     }
   });
 
@@ -388,86 +433,232 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const isSupported = data.is_supported;
     const status = data.status;
+    const predictedClass = data.predicted_class;
+
+    // Handle Grad-CAM visual evidence
+    const loc = data.localization || {};
+    if (loc.available && loc.overlay_data_url && loc.heatmap_data_url) {
+      currentOverlayDataUrl = loc.overlay_data_url;
+      currentHeatmapDataUrl = loc.heatmap_data_url;
+      if (btnViewOverlay) btnViewOverlay.disabled = false;
+      if (btnViewHeatmap) btnViewHeatmap.disabled = false;
+      setActiveViewMode("overlay");
+
+      if (resEvidenceCard) resEvidenceCard.style.display = "block";
+      if (resEvidenceText) {
+        resEvidenceText.textContent = `Model attention concentrated in ${loc.focus_region || "panel surface region"}. Mean activation intensity: ${loc.mean_activation || "N/A"}.`;
+      }
+    } else {
+      if (btnViewOverlay) btnViewOverlay.disabled = true;
+      if (btnViewHeatmap) btnViewHeatmap.disabled = true;
+      if (resEvidenceCard) resEvidenceCard.style.display = "none";
+      setActiveViewMode("original");
+    }
 
     if (!isSupported) {
-      // Stage 2 rejected: Non-aircraft image
-      if (stepValidation) stepValidation.className = "stage-step success";
-      if (stepScreening) stepScreening.className = "stage-step rejected";
-      if (stepClassifier) stepClassifier.className = "stage-step";
-      if (stepUncertainty) stepUncertainty.className = "stage-step";
-
-      // Banner styling
+      // Out-of-Domain Image
       if (resDecisionBanner) resDecisionBanner.className = "decision-banner unsupported";
-      if (resDecisionTitle) resDecisionTitle.textContent = "DOMAIN REJECTION — OUT-OF-DISTRIBUTION";
+      if (resDecisionTitle) resDecisionTitle.textContent = "DOMAIN SCREENING REJECTION";
       if (resDecisionLabel) resDecisionLabel.textContent = "UNSUPPORTED IMAGE";
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
-      // Hide VGG16 score bars
       if (resScoresBlock) resScoresBlock.style.display = "none";
 
-      // Show Domain screening block
-      if (resDomainBlock) {
-        resDomainBlock.style.display = "block";
-        const oodPct = (data.confidence * 100).toFixed(1);
-        if (valDomainScore) valDomainScore.textContent = `${(data.domain_screening.in_domain_score * 100).toFixed(1)}% In-Domain (${oodPct}% Reject Confidence)`;
-        if (barDomainScore) barDomainScore.style.width = `${(data.domain_screening.in_domain_score * 100).toFixed(1)}%`;
-        if (resMatchedCategory) resMatchedCategory.textContent = data.domain_screening.matched_category || "Non-Aircraft Image";
+      if (resActionBox) {
+        resActionBox.className = "action-recommendation-box";
+        if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
       }
-
-      // Telemetry items
-      if (telPipelineStatus) telPipelineStatus.textContent = "REJECTED (OOD)";
-      if (telConfidenceType) telConfidenceType.textContent = "Zero-Shot CLIP Screening";
-      if (telDecisionMargin) telDecisionMargin.textContent = "N/A (Classifier Not Run)";
-      if (telPreprocessing) telPreprocessing.textContent = "Screened Before VGG16 Input";
     } else if (status === "UNCERTAIN") {
-      // Stage 4 uncertain
-      if (stepValidation) stepValidation.className = "stage-step success";
-      if (stepScreening) stepScreening.className = "stage-step success";
-      if (stepClassifier) stepClassifier.className = "stage-step success";
-      if (stepUncertainty) stepUncertainty.className = "stage-step rejected";
-
+      // Uncertain / Boundary Decision
       if (resDecisionBanner) resDecisionBanner.className = "decision-banner uncertain";
-      if (resDecisionTitle) resDecisionTitle.textContent = "AMBIGUOUS STRUCTURAL DEFECT";
+      if (resDecisionTitle) resDecisionTitle.textContent = "AMBIGUOUS STRUCTURAL EVIDENCE";
       if (resDecisionLabel) resDecisionLabel.textContent = "UNCERTAIN — MANUAL REVIEW REQUIRED";
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
       renderScoreBars(data);
-    } else {
-      // Supported and classified
-      if (stepValidation) stepValidation.className = "stage-step success";
-      if (stepScreening) stepScreening.className = "stage-step success";
-      if (stepClassifier) stepClassifier.className = "stage-step success";
-      if (stepUncertainty) stepUncertainty.className = "stage-step success";
 
-      const isDent = data.predicted_class === "dent";
+      if (resActionBox) {
+        resActionBox.className = "action-recommendation-box";
+        if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
+      }
+    } else {
+      // Completed Defect Classification
+      const isDent = predictedClass === "dent";
       if (resDecisionBanner) resDecisionBanner.className = `decision-banner ${isDent ? "dent" : "crack"}`;
-      if (resDecisionTitle) resDecisionTitle.textContent = "STRUCTURAL DEFECT CONFIRMED";
-      if (resDecisionLabel) resDecisionLabel.textContent = isDent ? "SURFACE DENT" : "FATIGUE CRACK";
+      if (resDecisionTitle) resDecisionTitle.textContent = isDent ? "SURFACE DENT IDENTIFIED" : "FATIGUE CRACK IDENTIFIED";
+      if (resDecisionLabel) resDecisionLabel.textContent = isDent ? "SURFACE DENT DETECTED" : "FATIGUE CRACK DETECTED";
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
       renderScoreBars(data);
+
+      if (resActionBox) {
+        resActionBox.className = `action-recommendation-box ${isDent ? "" : "crack"}`;
+        if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
+      }
     }
 
+    // Populate Technical Details Accordion
+    if (telInspectionId) telInspectionId.textContent = data.inspection_id || "—";
+    if (telProcessingTime) telProcessingTime.textContent = data.processing_time_ms ? `${data.processing_time_ms} ms` : "—";
+    if (telClipScore) {
+      const screening = data.domain_screening || {};
+      const inPct = screening.in_domain_score ? `${(screening.in_domain_score * 100).toFixed(1)}% In-Domain` : "—";
+      telClipScore.textContent = inPct;
+    }
+    if (telDecisionMargin) {
+      telDecisionMargin.textContent = data.margin_from_decision !== null && data.margin_from_decision !== undefined
+        ? `\u00B1 ${data.margin_from_decision.toFixed(4)}`
+        : "N/A";
+    }
+    if (telPreprocessing) telPreprocessing.textContent = data.preprocessing || "224\u00D7224 RGB, 1./255";
+    if (telModelVersion) telModelVersion.textContent = data.model_version || "VGG16-AeroDamage-v1.0";
     if (resSafetyDisclaimer) resSafetyDisclaimer.textContent = data.disclaimer;
   }
 
   function renderScoreBars(data) {
     if (resScoresBlock) resScoresBlock.style.display = "block";
-    if (resDomainBlock) resDomainBlock.style.display = "none";
 
-    const dentPct = (data.raw_dent_score * 100).toFixed(2);
-    const crackPct = (data.raw_crack_score * 100).toFixed(2);
+    const dentPct = ((data.raw_dent_score ?? 0) * 100).toFixed(2);
+    const crackPct = ((data.raw_crack_score ?? 0) * 100).toFixed(2);
 
     if (valScoreDent) valScoreDent.textContent = `${dentPct}%`;
     if (barScoreDent) barScoreDent.style.width = `${dentPct}%`;
 
     if (valScoreCrack) valScoreCrack.textContent = `${crackPct}%`;
     if (barScoreCrack) barScoreCrack.style.width = `${crackPct}%`;
+  }
 
-    if (telPipelineStatus) telPipelineStatus.textContent = "VERIFIED";
-    if (telConfidenceType) telConfidenceType.textContent = "Raw Sigmoid Activation";
-    if (telDecisionMargin) telDecisionMargin.textContent = `\u00B1 ${data.margin_from_decision?.toFixed(4) || "0.0000"}`;
-    if (telPreprocessing) telPreprocessing.textContent = "224\u00D7224 RGB, 1./255";
+  // =========================================================================
+  // Report Generation & Export
+  // =========================================================================
+  btnExportReport?.addEventListener("click", async () => {
+    if (!currentInspectionResult) return;
+    try {
+      const res = await fetch("/api/inspection/report/html", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentInspectionResult),
+      });
+      if (!res.ok) throw new Error("Report generation failed");
+      const htmlText = await res.text();
+      const reportWindow = window.open("", "_blank");
+      if (reportWindow) {
+        reportWindow.document.open();
+        reportWindow.document.write(htmlText);
+        reportWindow.document.close();
+      } else {
+        showAlert("Popup blocked. Please permit popups to view printable report.", "amber");
+      }
+    } catch (e) {
+      showAlert(`Report generation error: ${e.message}`, "crimson");
+    }
+  });
+
+  btnExportJson?.addEventListener("click", () => {
+    if (!currentInspectionResult) return;
+    const jsonStr = JSON.stringify(currentInspectionResult, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `inspection_${currentInspectionResult.inspection_id || "record"}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // =========================================================================
+  // Session History Management
+  // =========================================================================
+  function saveInspectionToHistory(data) {
+    const record = {
+      inspection_id: data.inspection_id,
+      timestamp: data.timestamp,
+      filename: currentAnalysisFilename,
+      predicted_class: (data.predicted_class || "UNSUPPORTED").toUpperCase(),
+      model_score: data.model_score !== null && data.model_score !== undefined
+        ? `${(data.model_score * 100).toFixed(1)}%`
+        : "N/A",
+      status: data.status,
+      full_data: data,
+    };
+
+    inspectionHistory.unshift(record);
+    if (inspectionHistory.length > 25) inspectionHistory.pop();
+
+    try {
+      sessionStorage.setItem("aerodamage_inspections", JSON.stringify(inspectionHistory));
+    } catch (e) {}
+
+    renderHistoryTable();
+  }
+
+  function renderHistoryTable() {
+    if (!historyTbody) return;
+
+    if (historyCountBadge) {
+      historyCountBadge.textContent = `${inspectionHistory.length} Records`;
+    }
+
+    if (inspectionHistory.length === 0) {
+      historyTbody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+            No inspections performed during this session yet.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    historyTbody.innerHTML = inspectionHistory.map((item, idx) => {
+      const cls = item.predicted_class.toLowerCase();
+      let pillClass = "unsupported";
+      if (cls === "dent") pillClass = "dent";
+      else if (cls === "crack") pillClass = "crack";
+      else if (cls === "uncertain") pillClass = "uncertain";
+
+      const timeFormatted = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : "—";
+
+      return `
+        <tr>
+          <td style="font-weight: 600; color: var(--text-pure);">${item.inspection_id}</td>
+          <td>${timeFormatted}</td>
+          <td>${item.filename}</td>
+          <td><span class="status-pill ${pillClass}">${item.predicted_class}</span></td>
+          <td>${item.model_score}</td>
+          <td>${item.status}</td>
+          <td>
+            <button class="btn btn-sm btn-outline btn-history-report" data-idx="${idx}">Report</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    document.querySelectorAll(".btn-history-report").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const idx = parseInt(e.target.dataset.idx, 10);
+        const record = inspectionHistory[idx];
+        if (record?.full_data) {
+          try {
+            const res = await fetch("/api/inspection/report/html", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(record.full_data),
+            });
+            if (!res.ok) throw new Error("Report generation failed");
+            const htmlText = await res.text();
+            const w = window.open("", "_blank");
+            w.document.open();
+            w.document.write(htmlText);
+            w.document.close();
+          } catch (err) {
+            showAlert(`Failed to open report: ${err.message}`, "crimson");
+          }
+        }
+      });
+    });
   }
 
   // =========================================================================
@@ -520,7 +711,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const blob = await res.blob();
         handleCaptionFile(new File([blob], fileName, { type: "image/jpeg" }));
       } catch (err) {
-        showAlert(`Failed to load BLIP benchmark image: ${err.message}`, "error");
+        showAlert(`Failed to load BLIP benchmark image: ${err.message}`, "crimson");
       }
     });
   });

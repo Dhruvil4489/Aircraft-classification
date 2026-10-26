@@ -144,11 +144,11 @@
     <section class="content-section" id="section-analysis">
       <div class="section-header">
         <h2>Structural Damage Analysis Workstation</h2>
-        <p>Upload high-resolution aircraft panel imagery to execute the 4-stage validated defect inspection pipeline.</p>
+        <p>Automated visual damage inspection for aircraft exterior skin panels. Integrates domain relevance verification, VGG16 defect classification, and Grad-CAM visual attention mapping.</p>
       </div>
 
       <div class="interactive-layout">
-        <!-- Left: Image Viewport Panel -->
+        <!-- Left: Image Viewport & Evidence Controls -->
         <div class="card">
           <div class="panel-header">
             <h3>
@@ -157,9 +157,9 @@
                 <circle cx="8.5" cy="8.5" r="1.5"/>
                 <polyline points="21 15 16 10 5 21"/>
               </svg>
-              Inspection Image Input
+              Inspection Image Workspace
             </h3>
-            <span class="badge ready" id="analysis-model-badge">Pipeline Active</span>
+            <span class="badge" id="analysis-model-badge">VGG16 Inference</span>
           </div>
 
           <!-- Dropzone -->
@@ -175,43 +175,62 @@
               <span class="dropzone-hint">Supports JPEG, PNG, WebP up to 10 MB</span>
             </div>
 
-            <!-- Preview Viewport -->
+            <!-- Preview & Evidence Viewport -->
             <div class="preview-container" id="analysis-preview-container" style="display: none;">
+              <!-- View Mode Switcher -->
+              <div class="view-mode-bar" id="view-mode-bar">
+                <button type="button" class="view-mode-btn active" id="btn-view-orig" data-mode="original">Original Image</button>
+                <button type="button" class="view-mode-btn" id="btn-view-overlay" data-mode="overlay" disabled>Attention Overlay</button>
+                <button type="button" class="view-mode-btn" id="btn-view-heatmap" data-mode="heatmap" disabled>Grad-CAM Map</button>
+              </div>
+
               <div class="preview-image-wrapper">
                 <img id="analysis-preview-img" src="" alt="Inspection Preview">
               </div>
-              <div class="image-meta-bar" id="analysis-image-meta">
-                <span id="img-meta-dimensions">224 &times; 224 px</span>
-                <span id="img-meta-size">0 KB</span>
-                <span id="img-meta-format">JPEG</span>
+
+              <!-- Overlay Controls -->
+              <div class="overlay-slider-row" id="overlay-slider-row" style="display: none;">
+                <label for="overlay-opacity">Overlay Opacity: <span id="opacity-val">45%</span></label>
+                <input type="range" id="overlay-opacity" min="10" max="90" value="45" step="5">
               </div>
+
+              <div class="view-mode-caption" id="view-mode-caption">
+                Original inspection panel photograph.
+              </div>
+
+              <div class="image-meta-bar" id="analysis-image-meta">
+                <span id="img-meta-dimensions">— px</span>
+                <span id="img-meta-size">— KB</span>
+                <span id="img-meta-format">IMAGE</span>
+              </div>
+
               <div class="preview-actions">
-                <button class="btn btn-sm btn-secondary btn-block" id="btn-replace-analysis-img">Replace Image</button>
+                <button class="btn btn-sm btn-secondary" id="btn-replace-analysis-img">Replace Image</button>
                 <button class="btn btn-sm btn-danger" id="btn-remove-analysis-img">&times; Clear</button>
               </div>
             </div>
           </div>
 
-          <!-- Pre-verified Test Benchmarks -->
+          <!-- Pre-verified Test Benchmarks (No fake signatures) -->
           <div class="examples-picker">
-            <label class="picker-label">Load Pre-Verified Benchmark Samples:</label>
+            <label class="picker-label">Load Test Split Benchmark Samples:</label>
             <div class="example-buttons">
-              <button class="example-btn" data-file="dent_example_1.jpg" id="btn-sample-dent1">Dent Test #1</button>
-              <button class="example-btn" data-file="dent_example_2.jpg" id="btn-sample-dent2">Dent Test #2 (Task 9)</button>
-              <button class="example-btn" data-file="crack_example_1.jpg" id="btn-sample-crack1">Crack Test #1</button>
-              <button class="example-btn reject-fixture" data-type="signature" id="btn-sample-signature">Signature (OOD Test)</button>
+              <button type="button" class="example-btn" data-file="dent_example_1.jpg" id="btn-sample-dent1">Dent Benchmark #1</button>
+              <button type="button" class="example-btn" data-file="dent_example_2.jpg" id="btn-sample-dent2">Dent Benchmark #2</button>
+              <button type="button" class="example-btn" data-file="crack_example_1.jpg" id="btn-sample-crack1">Crack Benchmark #1</button>
+              <button type="button" class="example-btn" data-file="crack_example_2.jpg" id="btn-sample-crack2">Crack Benchmark #2</button>
             </div>
           </div>
 
           <div style="margin-top: 1rem;">
             <button class="btn btn-primary btn-block" id="btn-run-analysis" disabled>
               <span class="spinner" id="analysis-spinner" style="display: none;"></span>
-              <span id="analysis-btn-text">Execute 4-Stage Inspection Pipeline</span>
+              <span id="analysis-btn-text">Analyze Inspection Image</span>
             </button>
           </div>
         </div>
 
-        <!-- Right: Multi-Stage Telemetry & Results Console -->
+        <!-- Right: Primary Inspection Findings & Decision Console -->
         <div class="card">
           <div class="panel-header">
             <h3>
@@ -220,38 +239,39 @@
                 <line x1="12" y1="20" x2="12" y2="4"/>
                 <line x1="6" y1="20" x2="6" y2="14"/>
               </svg>
-              Inspection Telemetry & Decision Console
+              Inspection Findings & Recommendations
             </h3>
             <span class="badge" id="decision-threshold-badge">Threshold = 0.50</span>
-          </div>
-
-          <!-- Pipeline Stage Progress Tracker -->
-          <div class="pipeline-tracker" id="pipeline-tracker">
-            <div class="stage-step" id="step-validation">1. File Check</div>
-            <div class="stage-step" id="step-screening">2. Domain OOD</div>
-            <div class="stage-step" id="step-classifier">3. VGG16 Head</div>
-            <div class="stage-step" id="step-uncertainty">4. Uncertainty</div>
           </div>
 
           <!-- Results Container -->
           <div class="results-viewport" id="analysis-results-viewport">
             <!-- Empty State -->
             <div class="empty-state" id="analysis-empty-state">
-              <div class="empty-state-icon">🛡️</div>
-              <p>Upload or select an image to initiate the multi-stage structural inspection analysis.</p>
+              <div class="empty-state-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+              </div>
+              <p>Upload an aircraft inspection photograph or select a benchmark sample to execute damage analysis.</p>
             </div>
 
             <!-- Populated Results View -->
             <div class="results-content" id="analysis-results-content" style="display: none;">
-              <!-- Decision Banner -->
+              <!-- Decision Status Banner -->
               <div class="decision-banner" id="res-decision-banner">
-                <span class="decision-title" id="res-decision-title">Defect Status</span>
+                <span class="decision-title" id="res-decision-title">Inspection Status</span>
                 <span class="decision-label" id="res-decision-label">—</span>
                 <p class="decision-text" id="res-decision-message">—</p>
               </div>
 
-              <!-- Raw Model Scores (Only shown for supported images) -->
+              <!-- Defect Scores Block -->
               <div class="scores-block" id="res-scores-block">
+                <div class="scores-header">
+                  <span class="scores-title">Model Activation Scores</span>
+                  <span class="scores-sub">Uncalibrated Sigmoid Output</span>
+                </div>
+
                 <div class="score-row">
                   <div class="score-meta">
                     <span>Dent Score P(dent)</span>
@@ -264,57 +284,146 @@
 
                 <div class="score-row">
                   <div class="score-meta">
-                    <span>Crack Score P(crack) = 1 - P(dent)</span>
+                    <span>Crack Score P(crack) = 1 &minus; P(dent)</span>
                     <span id="val-score-crack">0.00%</span>
                   </div>
                   <div class="bar-track">
                     <div class="bar-fill crack" id="bar-score-crack" style="width: 0%;"></div>
                   </div>
                 </div>
-              </div>
-
-              <!-- Domain Screening Breakdown (Shown for all, critical for rejected images) -->
-              <div class="scores-block" id="res-domain-block" style="display: none;">
-                <div class="score-row">
-                  <div class="score-meta">
-                    <span>Aircraft In-Domain Relevance</span>
-                    <span id="val-domain-score">0.00%</span>
-                  </div>
-                  <div class="bar-track">
-                    <div class="bar-fill amber" id="bar-domain-score" style="width: 0%;"></div>
-                  </div>
-                </div>
-                <div style="font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-secondary); margin-top: 0.5rem;">
-                  <span>Matched Category: </span><strong id="res-matched-category" style="color: var(--text-pure);">—</strong>
+                <div class="score-note">
+                  Classification rule: classified as <strong>DENT</strong> if P(dent) &gt; 0.50, else <strong>CRACK</strong>. Score represents activation strength, not calibrated structural safety probability.
                 </div>
               </div>
 
-              <!-- Technical Telemetry Details -->
-              <div class="telemetry-grid">
-                <div class="telemetry-item">
-                  <div class="telemetry-item-k">Pipeline Decision</div>
-                  <div class="telemetry-item-v" id="tel-pipeline-status">—</div>
+              <!-- Visual Evidence Finding -->
+              <div class="evidence-summary-card" id="res-evidence-card">
+                <div class="evidence-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  Visual Damage Evidence (Grad-CAM Explainability)
                 </div>
-                <div class="telemetry-item">
-                  <div class="telemetry-item-k">Confidence Type</div>
-                  <div class="telemetry-item-v" id="tel-confidence-type">Uncalibrated Sigmoid</div>
-                </div>
-                <div class="telemetry-item">
-                  <div class="telemetry-item-k">Decision Margin</div>
-                  <div class="telemetry-item-v" id="tel-decision-margin">&plusmn; 0.00</div>
-                </div>
-                <div class="telemetry-item">
-                  <div class="telemetry-item-k">Preprocessing Parity</div>
-                  <div class="telemetry-item-v" id="tel-preprocessing">224&times;224, 1./255</div>
-                </div>
+                <p id="res-evidence-text">
+                  Attention map generated for convolutional features in VGG16 block5_conv3. Visualizes localized panel features influencing the prediction.
+                </p>
               </div>
+
+              <!-- Recommended Next Action (Operational Guidance) -->
+              <div class="action-recommendation-box" id="res-action-box">
+                <div class="action-recommendation-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  Recommended Next Step
+                </div>
+                <p class="action-recommendation-text" id="res-recommended-action">
+                  Schedule manual inspection by qualified aircraft maintenance technician.
+                </p>
+              </div>
+
+              <!-- Inspection Report & Export Actions -->
+              <div class="inspection-actions-row">
+                <button type="button" class="btn btn-secondary" id="btn-export-report">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
+                  View / Print Inspection Report
+                </button>
+                <button type="button" class="btn btn-outline" id="btn-export-json">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Export JSON
+                </button>
+              </div>
+
+              <!-- Collapsible Technical Diagnostics & Telemetry -->
+              <details class="tech-details-accordion" id="tech-details-accordion">
+                <summary class="tech-summary">
+                  Technical Diagnostics & Telemetry
+                  <span class="summary-arrow">&rsaquo;</span>
+                </summary>
+                <div class="tech-details-content">
+                  <div class="telemetry-grid">
+                    <div class="telemetry-item">
+                      <div class="telemetry-item-k">Inspection ID</div>
+                      <div class="telemetry-item-v" id="tel-inspection-id">—</div>
+                    </div>
+                    <div class="telemetry-item">
+                      <div class="telemetry-item-k">Inference Duration</div>
+                      <div class="telemetry-item-v" id="tel-processing-time">—</div>
+                    </div>
+                    <div class="telemetry-item">
+                      <div class="telemetry-item-k">Domain Relevance</div>
+                      <div class="telemetry-item-v" id="tel-clip-score">—</div>
+                    </div>
+                    <div class="telemetry-item">
+                      <div class="telemetry-item-k">Decision Margin</div>
+                      <div class="telemetry-item-v" id="tel-decision-margin">&plusmn; 0.00</div>
+                    </div>
+                    <div class="telemetry-item">
+                      <div class="telemetry-item-k">Preprocessing Parity</div>
+                      <div class="telemetry-item-v" id="tel-preprocessing">224&times;224 RGB, 1./255</div>
+                    </div>
+                    <div class="telemetry-item">
+                      <div class="telemetry-item-k">Model Architecture</div>
+                      <div class="telemetry-item-v" id="tel-model-version">VGG16 Frozen Backbone</div>
+                    </div>
+                  </div>
+                </div>
+              </details>
 
               <!-- Aviation Safety Disclaimer -->
               <div class="disclaimer-box">
-                <strong>Safety Notice:</strong> <span id="res-safety-disclaimer">Model output for educational purposes only; not a certified aviation safety assessment.</span>
+                <strong>OPERATIONAL LIMITATION:</strong> <span id="res-safety-disclaimer">Model output for educational purposes only; not a certified aviation safety assessment.</span>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Recent Inspection History Section -->
+      <div class="card history-section" id="section-history" style="margin-top: 1.5rem;">
+        <div class="panel-header">
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Session Inspection History
+          </h3>
+          <span class="badge" id="history-count-badge">0 Records</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table" id="history-table">
+            <thead>
+              <tr>
+                <th>Inspection ID</th>
+                <th>Timestamp (UTC)</th>
+                <th>File Reference</th>
+                <th>Defect Outcome</th>
+                <th>Model Score</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+                  No inspections performed during this session yet.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
