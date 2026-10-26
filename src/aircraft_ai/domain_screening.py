@@ -157,3 +157,67 @@ def screen_image_domain(
         "rejection_reason": rejection_reason,
         "breakdown": breakdown,
     }
+
+
+def assess_damage_presence(
+    image_input: Union[str, Path, bytes, Image.Image],
+    intact_prompts: Optional[List[str]] = None,
+    damage_prompts: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Evaluate whether an aircraft image shows close-up structural damage evidence
+    or represents an ordinary / intact aircraft photograph (Stage B).
+    
+    Returns structured Stage B metrics:
+    - has_damage_evidence: bool
+    - damage_score: float
+    - intact_score: float
+    - matched_view: str
+    - breakdown: dict
+    """
+    img = load_pil_image_safely(image_input)
+    processor, model = get_clip_pipeline()
+
+    intact_list = intact_prompts or config.STAGE_B_INTACT_PROMPTS
+    damage_list = damage_prompts or config.STAGE_B_DAMAGE_PROMPTS
+    all_prompts = intact_list + damage_list
+    n_intact = len(intact_list)
+
+    with torch.no_grad():
+        inputs = processor(text=all_prompts, images=img, return_tensors="pt", padding=True)
+        outputs = model(**inputs)
+        probs = F.softmax(outputs.logits_per_image, dim=1).squeeze().tolist()
+
+    if isinstance(probs, float):
+        probs = [probs]
+
+    intact_scores = probs[:n_intact]
+    damage_scores = probs[n_intact:]
+
+    total_intact_score = float(sum(intact_scores))
+    total_damage_score = float(sum(damage_scores))
+
+    has_damage_evidence = total_damage_score > total_intact_score
+    matched_view = (
+        "Close-Up Structural Damage Panel"
+        if has_damage_evidence
+        else "Ordinary / Intact Aircraft Photograph"
+    )
+
+    breakdown = {prompt: round(float(prob), 4) for prompt, prob in zip(all_prompts, probs)}
+
+    logger.info(
+        "Damage presence assessment: has_damage=%s, damage_score=%.4f, intact_score=%.4f, view='%s'",
+        has_damage_evidence,
+        total_damage_score,
+        total_intact_score,
+        matched_view,
+    )
+
+    return {
+        "has_damage_evidence": has_damage_evidence,
+        "damage_score": round(total_damage_score, 4),
+        "intact_score": round(total_intact_score, 4),
+        "matched_view": matched_view,
+        "breakdown": breakdown,
+    }
+

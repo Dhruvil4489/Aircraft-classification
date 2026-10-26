@@ -156,28 +156,31 @@ def analyze_image(
     domain_threshold: float = config.DOMAIN_ACCEPTANCE_THRESHOLD,
     uncertainty_margin: float = config.UNCERTAINTY_MARGIN,
 ) -> Dict[str, Any]:
-    """Execute the multi-stage damage inspection pipeline:
+    """Execute the multi-stage aerospace damage inspection pipeline:
     
-    Stage 1: File & image validation (format, size, mode, decode).
-    Stage 2: Semantic aircraft-image relevance screening (CLIP zero-shot).
-    Stage 3: Damage classification (VGG16 baseline, executed only if domain-accepted).
-    Stage 4: Confidence scoring and uncertainty evaluation.
-    Stage 5: Visual damage explainability via Grad-CAM (block5_conv3).
+    Stage A — Aircraft image validation: Format, decodability, and domain relevance screening.
+    Stage B — Damage presence detection: Verify whether the image exhibits close-up structural defect
+              evidence or represents an ordinary / intact aircraft photograph.
+    Stage C — Damage type classification: VGG16 academic baseline (dent vs crack), executed ONLY
+              when damage presence permits classification.
     """
     start_time = time.perf_counter()
     inspection_id = f"INS-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
     timestamp_iso = datetime.now(timezone.utc).isoformat()
+    model_version_str = "VGG16-AeroDamage-v1.0 (ImageNet frozen)"
 
-    from aircraft_ai.domain_screening import screen_image_domain
+    from aircraft_ai.domain_screening import assess_damage_presence, screen_image_domain
     from aircraft_ai.gradcam import compute_gradcam
 
-    # Stage 2: Domain Relevance Screening
+    # -------------------------------------------------------------------------
+    # Stage A: Aircraft Image Validation
+    # -------------------------------------------------------------------------
     domain_res = screen_image_domain(image_input, threshold=domain_threshold)
 
     if not domain_res["is_aircraft_domain"]:
         duration_ms = round((time.perf_counter() - start_time) * 1000, 1)
         logger.warning(
-            "Rejected out-of-domain image: matched '%s' (in_domain_score=%.4f < %.2f)",
+            "Stage A Rejection — non-aircraft image: '%s' (in_domain_score=%.4f < %.2f)",
             domain_res["matched_category"],
             domain_res["in_domain_score"],
             domain_threshold,
@@ -185,12 +188,21 @@ def analyze_image(
         return {
             "inspection_id": inspection_id,
             "timestamp": timestamp_iso,
+            # Explicit 3-stage status fields
+            "aircraft_image_status": config.AIRCRAFT_STATUS_UNSUPPORTED,
+            "damage_presence_status": config.DAMAGE_PRESENCE_NOT_ASSESSED,
+            "damage_type": config.DAMAGE_TYPE_NOT_ASSESSED,
+            "dent_score": None,
+            "crack_score": None,
+            "uncertainty_status": config.UNCERTAINTY_OUT_OF_DOMAIN,
+            "model_version": model_version_str,
+            # Backward-compatible fields
             "status": config.STATUS_UNSUPPORTED,
             "is_supported": False,
             "predicted_class": None,
             "predicted_class_id": None,
             "model_score": None,
-            "score_type": "CLIP Zero-Shot Screening",
+            "score_type": "CLIP Zero-Shot Domain Screening",
             "class_scores": None,
             "decision_message": (
                 f"Unsupported image — this image could not be verified as an aircraft inspection image "
@@ -207,20 +219,81 @@ def analyze_image(
             "confidence_label": "Domain Rejection Confidence",
             "threshold": classification_threshold,
             "uncertainty_margin": uncertainty_margin,
-            "uncertainty_status": "out_of_domain",
             "margin_from_decision": None,
             "domain_screening": domain_res,
+            "damage_presence": {
+                "assessed": False,
+                "reason": "Stage B bypassed due to Stage A domain rejection.",
+            },
             "localization": {
                 "available": False,
                 "reason": "Classification and localization bypassed for out-of-domain imagery.",
             },
-            "model_version": "VGG16-AeroDamage-v1.0 (ImageNet frozen)",
-            "preprocessing": "Domain validation executed prior to VGG16 input",
+            "preprocessing": "Stage A domain validation executed prior to VGG16 input",
             "processing_time_ms": duration_ms,
             "disclaimer": config.SAFETY_DISCLAIMER,
         }
 
-    # Stage 3: Damage Classification on Supported Aircraft Image
+    # -------------------------------------------------------------------------
+    # Stage B: Damage Presence Detection
+    # -------------------------------------------------------------------------
+    presence_res = assess_damage_presence(image_input)
+
+    if not presence_res["has_damage_evidence"]:
+        duration_ms = round((time.perf_counter() - start_time) * 1000, 1)
+        logger.info(
+            "Stage B Finding — Ordinary aircraft photograph accepted (intact_score=%.4f > damage_score=%.4f). "
+            "Dent-vs-crack classifier suppressed to prevent false damage classification.",
+            presence_res["intact_score"],
+            presence_res["damage_score"],
+        )
+        return {
+            "inspection_id": inspection_id,
+            "timestamp": timestamp_iso,
+            # Explicit 3-stage status fields
+            "aircraft_image_status": config.AIRCRAFT_STATUS_SUPPORTED,
+            "damage_presence_status": config.DAMAGE_PRESENCE_NOT_ASSESSED,
+            "damage_type": config.DAMAGE_TYPE_NOT_ASSESSED,
+            "dent_score": None,
+            "crack_score": None,
+            "uncertainty_status": config.UNCERTAINTY_DAMAGE_PRESENCE_UNVERIFIED,
+            "model_version": model_version_str,
+            # Backward-compatible fields
+            "status": config.STATUS_DAMAGE_UNVERIFIED,
+            "is_supported": True,
+            "predicted_class": None,
+            "predicted_class_id": None,
+            "model_score": None,
+            "score_type": "Damage Presence Unverified (Dent-vs-Crack Model Limited)",
+            "class_scores": None,
+            "decision_message": config.DAMAGE_PRESENCE_UNVERIFIED_MESSAGE,
+            "recommended_action": (
+                "Aircraft photograph accepted, but the current VGG16 model is a binary dent-versus-crack classifier "
+                "trained exclusively on damaged panels. It cannot reliably determine whether an aircraft is damaged or undamaged. "
+                "For defect assessment, upload a high-resolution close-up technical inspection photograph of the specific panel under review, "
+                "or conduct manual visual / NDT inspection in accordance with the Structural Repair Manual (SRM Chapter 51)."
+            ),
+            "raw_dent_score": None,
+            "raw_crack_score": None,
+            "confidence": presence_res["intact_score"],
+            "confidence_label": "Intact Aircraft Screening Confidence",
+            "threshold": classification_threshold,
+            "uncertainty_margin": uncertainty_margin,
+            "margin_from_decision": None,
+            "domain_screening": domain_res,
+            "damage_presence": presence_res,
+            "localization": {
+                "available": False,
+                "reason": "Attention localization is not displayed for ordinary aircraft photographs where damage presence is unverified.",
+            },
+            "preprocessing": f"{config.IMG_ROWS}x{config.IMG_COLS} RGB, bilinear resize, scaled 1./255",
+            "processing_time_ms": duration_ms,
+            "disclaimer": config.SAFETY_DISCLAIMER,
+        }
+
+    # -------------------------------------------------------------------------
+    # Stage C: Damage Type Classification (Dent vs Crack)
+    # -------------------------------------------------------------------------
     active_model = model if model is not None else get_model()
     class_res = predict_damage(image_input, model=active_model, threshold=classification_threshold)
 
@@ -228,8 +301,10 @@ def analyze_image(
     crack_score = class_res["probability_crack"]
     margin_from_decision = abs(dent_score - classification_threshold)
 
-    # Stage 4: Uncertainty Evaluation
+    # Uncertainty evaluation within Stage C
     if margin_from_decision < uncertainty_margin:
+        damage_type = config.DAMAGE_TYPE_UNCERTAIN
+        uncertainty_status = config.UNCERTAINTY_UNCERTAIN
         status = config.STATUS_UNCERTAIN
         predicted_class = "uncertain"
         predicted_class_id = -1
@@ -243,16 +318,16 @@ def analyze_image(
             "classification. Conduct General Visual Inspection (GVI) and Detailed Inspection (DET) "
             "under 10x magnification with oblique lighting per NDT manual."
         )
-        uncertainty_status = "low_decision_margin"
         target_gradcam_class = "dent" if dent_score >= 0.5 else "crack"
     else:
+        damage_type = class_res["predicted_class"]
+        uncertainty_status = config.UNCERTAINTY_CONFIDENT
         status = config.STATUS_COMPLETED
-        predicted_class = class_res["predicted_class"]
+        predicted_class = damage_type
         predicted_class_id = class_res["predicted_class_id"]
-        decision_message = f"Defect classified as {predicted_class.upper()} based on structural visual features."
-        uncertainty_status = "confident_prediction"
-        target_gradcam_class = predicted_class
-        if predicted_class == "crack":
+        decision_message = f"Defect classified as {damage_type.upper()} based on structural visual features."
+        target_gradcam_class = damage_type
+        if damage_type == "crack":
             recommended_action = (
                 "CRITICAL: Suspected fatigue crack discontinuity detected. Immediately tag component and restrict "
                 "from service pending Non-Destructive Testing (High-Frequency Eddy Current / Ultrasonic Inspection per "
@@ -265,7 +340,7 @@ def analyze_image(
                 "Schedule NDT verification."
             )
 
-    # Stage 5: Visual Damage Explainability (Grad-CAM on block5_conv3)
+    # Visual Damage Explainability (Grad-CAM on block5_conv3)
     localization = compute_gradcam(
         image_input,
         target_class=target_gradcam_class,
@@ -277,6 +352,15 @@ def analyze_image(
     return {
         "inspection_id": inspection_id,
         "timestamp": timestamp_iso,
+        # Explicit 3-stage status fields
+        "aircraft_image_status": config.AIRCRAFT_STATUS_SUPPORTED,
+        "damage_presence_status": config.DAMAGE_PRESENCE_DAMAGE_DETECTED,
+        "damage_type": damage_type,
+        "dent_score": round(dent_score, 4),
+        "crack_score": round(crack_score, 4),
+        "uncertainty_status": uncertainty_status,
+        "model_version": model_version_str,
+        # Backward-compatible fields
         "status": status,
         "is_supported": True,
         "predicted_class": predicted_class,
@@ -295,14 +379,14 @@ def analyze_image(
         "confidence_label": "Model Score (Uncalibrated Sigmoid Output)",
         "threshold": classification_threshold,
         "uncertainty_margin": uncertainty_margin,
-        "uncertainty_status": uncertainty_status,
         "margin_from_decision": round(margin_from_decision, 4),
         "domain_screening": domain_res,
+        "damage_presence": presence_res,
         "localization": localization,
         "class_indices": config.CLASS_INDICES,
-        "model_version": "VGG16-AeroDamage-v1.0 (ImageNet frozen)",
         "preprocessing": f"{config.IMG_ROWS}x{config.IMG_COLS} RGB, bilinear resize, scaled 1./255",
         "processing_time_ms": duration_ms,
         "disclaimer": config.SAFETY_DISCLAIMER,
     }
+
 

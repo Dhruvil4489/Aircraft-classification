@@ -89,6 +89,7 @@ DOMAIN_SCREENING_MODEL_ID = os.getenv("DOMAIN_SCREENING_MODEL_ID", "openai/clip-
 DOMAIN_ACCEPTANCE_THRESHOLD = float(os.getenv("DOMAIN_ACCEPTANCE_THRESHOLD", "0.50"))
 UNCERTAINTY_MARGIN = float(os.getenv("UNCERTAINTY_MARGIN", "0.12"))
 
+# Stage A: Aircraft image validation prompts
 IN_DOMAIN_PROMPTS = [
     "a photo of an aircraft exterior fuselage surface showing damage or defect",
     "a close-up technical inspection photo of an aircraft metal panel with crack or dent",
@@ -105,14 +106,52 @@ OUT_OF_DOMAIN_PROMPTS = [
     "a digital diagram, screenshot, user interface, or cartoon drawing",
 ]
 
-# Supported Analysis Outcomes
+# Stage B: Damage presence screening prompts (Contrastive: Intact/Ordinary vs Damaged close-up)
+STAGE_B_INTACT_PROMPTS = [
+    "an undamaged aircraft with clean, intact exterior panels without any cracks or dents",
+    "an ordinary photograph of an airplane or aircraft in normal operational condition",
+]
+
+STAGE_B_DAMAGE_PROMPTS = [
+    "a photo of an aircraft exterior fuselage surface showing damage, crack, or dent defect",
+    "a close-up technical inspection photo of an aircraft metal panel with crack or dent",
+]
+
+# Explicit 3-Stage Pipeline Statuses
+AIRCRAFT_STATUS_SUPPORTED = "SUPPORTED"
+AIRCRAFT_STATUS_UNSUPPORTED = "UNSUPPORTED"
+
+DAMAGE_PRESENCE_DAMAGE_DETECTED = "DAMAGE_DETECTED"
+DAMAGE_PRESENCE_NO_DAMAGE_DETECTED = "NO_DAMAGE_DETECTED"
+DAMAGE_PRESENCE_UNCERTAIN = "UNCERTAIN"
+DAMAGE_PRESENCE_NOT_ASSESSED = "NOT_ASSESSED"
+
+DAMAGE_TYPE_DENT = "dent"
+DAMAGE_TYPE_CRACK = "crack"
+DAMAGE_TYPE_UNCERTAIN = "UNCERTAIN"
+DAMAGE_TYPE_NOT_ASSESSED = "NOT_ASSESSED"
+
+UNCERTAINTY_CONFIDENT = "CONFIDENT"
+UNCERTAINTY_UNCERTAIN = "UNCERTAIN"
+UNCERTAINTY_OUT_OF_DOMAIN = "OUT_OF_DOMAIN"
+UNCERTAINTY_DAMAGE_PRESENCE_UNVERIFIED = "DAMAGE_PRESENCE_UNVERIFIED"
+
+# Backward-compatible status codes for existing API consumers
 STATUS_COMPLETED = "COMPLETED"
 STATUS_UNSUPPORTED = "UNSUPPORTED_IMAGE"
 STATUS_UNCERTAIN = "UNCERTAIN"
+STATUS_DAMAGE_UNVERIFIED = "DAMAGE_PRESENCE_UNVERIFIED"
 STATUS_FAILED = "ANALYSIS_FAILED"
+
+# Standard aerospace engineering limitation messages
+DAMAGE_PRESENCE_UNVERIFIED_MESSAGE = (
+    "Aircraft image accepted, but damage presence cannot be reliably determined "
+    "by the current dent-versus-crack classifier. No verified damage finding is available."
+)
 
 # P2 Flags (Optional enhancements, default OFF)
 ENABLE_DATA_AUGMENTATION = os.getenv("ENABLE_DATA_AUGMENTATION", "false").lower() == "true"
 ENABLE_FINE_TUNING = os.getenv("ENABLE_FINE_TUNING", "false").lower() == "true"
 ENABLE_CLASS_WEIGHTS = os.getenv("ENABLE_CLASS_WEIGHTS", "false").lower() == "true"
+
 

@@ -55,14 +55,20 @@ def get_gradcam_submodels(model: Any = None) -> Tuple[tf.keras.Model, tf.keras.M
             head_input = tf.keras.Input(shape=last_conv.output.shape[1:])
             x = block5_pool(head_input)
             x = flatten(x)
-            for layer in active_model.layers[1:]:
+            for layer in active_model.layers[1:-1]:
                 x = layer(x)
 
-            head_model = tf.keras.Model(head_input, x, name="gradcam_head_classifier")
+            # Pre-activation logit linear layer (avoids sigmoid vanishing gradient saturation)
+            final_layer = active_model.layers[-1]
+            dense_linear = tf.keras.layers.Dense(1, name="gradcam_logit_linear")
+            logit = dense_linear(x)
+
+            head_model = tf.keras.Model(head_input, logit, name="gradcam_head_classifier")
+            dense_linear.set_weights(final_layer.get_weights())
 
             _CONV_MODEL = conv_model
             _HEAD_MODEL = head_model
-            logger.info("Initialized Grad-CAM submodels for block5_conv3.")
+            logger.info("Initialized Grad-CAM submodels for block5_conv3 (pre-activation logit head).")
 
     return _CONV_MODEL, _HEAD_MODEL
 
@@ -114,14 +120,14 @@ def compute_gradcam(
         with tf.GradientTape() as tape:
             conv_out = conv_model(processed_batch)
             tape.watch(conv_out)
-            preds = head_model(conv_out)
-            prob_dent = preds[0][0]
+            logit_out = head_model(conv_out)
+            logit_val = logit_out[0][0]
 
-            # Binary crossentropy gradient target for the requested class
+            # Pre-sigmoid linear logit target score avoids sigmoid vanishing gradients
             if target_class == "dent":
-                target_score = prob_dent
+                target_score = logit_val
             else:
-                target_score = 1.0 - prob_dent
+                target_score = -logit_val
 
         grads = tape.gradient(target_score, conv_out)
         if grads is None:

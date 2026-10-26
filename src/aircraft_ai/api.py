@@ -347,9 +347,12 @@ async def generate_inspection_report_html(data: Dict[str, Any]):
     inspection_id = data.get("inspection_id", "INS-UNKNOWN")
     timestamp = data.get("timestamp", "N/A")
     status_code = data.get("status", "N/A")
-    pred_class = (data.get("predicted_class") or "UNKNOWN").upper()
+    aircraft_status = data.get("aircraft_image_status", "SUPPORTED")
+    presence_status = data.get("damage_presence_status", "NOT_ASSESSED")
+    damage_type = (data.get("damage_type") or data.get("predicted_class") or "NOT_ASSESSED").upper()
+    pred_class = (data.get("predicted_class") or data.get("damage_type") or "NOT_ASSESSED").upper()
     model_score = data.get("model_score")
-    score_display = f"{float(model_score) * 100:.2f}%" if model_score is not None else "N/A"
+    score_display = f"{float(model_score) * 100:.2f}%" if model_score is not None else "N/A (Damage presence unverified)"
     recommended_action = data.get("recommended_action", "Conduct manual visual inspection.")
     decision_message = data.get("decision_message", "")
     processing_time = data.get("processing_time_ms", 0)
@@ -394,6 +397,7 @@ async def generate_inspection_report_html(data: Dict[str, Any]):
     .status-badge.crack {{ background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }}
     .status-badge.dent {{ background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }}
     .status-badge.uncertain {{ background: #fffbeb; color: #b45309; border-color: #fde68a; }}
+    .status-badge.damage_presence_unverified {{ background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }}
     table {{ width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }}
     th, td {{ padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; }}
     th {{ background: #f8fafc; font-weight: 600; width: 30%; }}
@@ -441,15 +445,17 @@ async def generate_inspection_report_html(data: Dict[str, Any]):
     </div>
   </div>
 
-  <div class="status-badge {pred_class.lower()}">INSPECTION STATUS: {status_code} — {pred_class}</div>
+  <div class="status-badge {status_code.lower()}">INSPECTION STATUS: {status_code} — {damage_type}</div>
 
   <table>
-    <tr><th>Predicted Defect Class</th><td><strong>{pred_class}</strong></td></tr>
-    <tr><th>Model Score</th><td>{score_display} (Uncalibrated Sigmoid Output, Threshold = 0.50)</td></tr>
+    <tr><th>Stage A: Aircraft Image Status</th><td><strong>{aircraft_status}</strong></td></tr>
+    <tr><th>Stage B: Damage Presence</th><td><strong>{presence_status}</strong></td></tr>
+    <tr><th>Stage C: Damage Type</th><td><strong>{damage_type}</strong></td></tr>
+    <tr><th>Model Score</th><td>{score_display}</td></tr>
     <tr><th>Diagnostic Finding</th><td>{decision_message}</td></tr>
     <tr><th>Recommended Operational Action</th><td><strong>{recommended_action}</strong></td></tr>
     <tr><th>Inference Duration</th><td>{processing_time} ms</td></tr>
-    <tr><th>Model Architecture</th><td>VGG16 (ImageNet Backbone Frozen) + Binary Classification Head</td></tr>
+    <tr><th>Model Architecture</th><td>VGG16 (ImageNet Backbone Frozen) + Pre-Activation Grad-CAM Head</td></tr>
   </table>
 
   <h3>Visual Explainability Evidence (Grad-CAM Attention)</h3>

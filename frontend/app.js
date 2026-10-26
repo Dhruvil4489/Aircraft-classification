@@ -68,9 +68,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // Telemetry items inside collapsible details
   const telInspectionId = document.getElementById("tel-inspection-id");
   const telProcessingTime = document.getElementById("tel-processing-time");
-  const telClipScore = document.getElementById("tel-clip-score");
+  const telAircraftStatus = document.getElementById("tel-aircraft-status");
+  const telPresenceStatus = document.getElementById("tel-presence-status");
+  const telDamageType = document.getElementById("tel-damage-type");
+  const telUncertaintyStatus = document.getElementById("tel-uncertainty-status");
   const telDecisionMargin = document.getElementById("tel-decision-margin");
-  const telPreprocessing = document.getElementById("tel-preprocessing");
   const telModelVersion = document.getElementById("tel-model-version");
   const resSafetyDisclaimer = document.getElementById("res-safety-disclaimer");
 
@@ -433,7 +435,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const isSupported = data.is_supported;
     const status = data.status;
-    const predictedClass = data.predicted_class;
+    const aircraftStatus = data.aircraft_image_status || (isSupported ? "SUPPORTED" : "UNSUPPORTED");
+    const presenceStatus = data.damage_presence_status || "NOT_ASSESSED";
+    const damageType = data.damage_type || data.predicted_class;
 
     // Handle Grad-CAM visual evidence
     const loc = data.localization || {};
@@ -455,10 +459,10 @@ document.addEventListener("DOMContentLoaded", () => {
       setActiveViewMode("original");
     }
 
-    if (!isSupported) {
-      // Out-of-Domain Image
+    if (!isSupported || aircraftStatus === "UNSUPPORTED") {
+      // Stage A: Out-of-Domain Image
       if (resDecisionBanner) resDecisionBanner.className = "decision-banner unsupported";
-      if (resDecisionTitle) resDecisionTitle.textContent = "DOMAIN SCREENING REJECTION";
+      if (resDecisionTitle) resDecisionTitle.textContent = "STAGE A: DOMAIN SCREENING REJECTION";
       if (resDecisionLabel) resDecisionLabel.textContent = "UNSUPPORTED IMAGE";
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
@@ -468,10 +472,24 @@ document.addEventListener("DOMContentLoaded", () => {
         resActionBox.className = "action-recommendation-box";
         if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
       }
-    } else if (status === "UNCERTAIN") {
-      // Uncertain / Boundary Decision
+    } else if (status === "DAMAGE_PRESENCE_UNVERIFIED" || presenceStatus === "NOT_ASSESSED") {
+      // Stage B: Ordinary Aircraft Image Accepted — Damage Presence Unverified
+      if (resDecisionBanner) resDecisionBanner.className = "decision-banner unverified";
+      if (resDecisionTitle) resDecisionTitle.textContent = "STAGE B: DAMAGE PRESENCE UNVERIFIED";
+      if (resDecisionLabel) resDecisionLabel.textContent = "NO VERIFIED DAMAGE FINDING";
+      if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
+
+      // Crucial: Suppress score bars for ordinary aircraft
+      if (resScoresBlock) resScoresBlock.style.display = "none";
+
+      if (resActionBox) {
+        resActionBox.className = "action-recommendation-box";
+        if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
+      }
+    } else if (status === "UNCERTAIN" || damageType === "UNCERTAIN") {
+      // Stage C: Damage Detected but Ambiguous Defect Type
       if (resDecisionBanner) resDecisionBanner.className = "decision-banner uncertain";
-      if (resDecisionTitle) resDecisionTitle.textContent = "AMBIGUOUS STRUCTURAL EVIDENCE";
+      if (resDecisionTitle) resDecisionTitle.textContent = "STAGE C: AMBIGUOUS STRUCTURAL EVIDENCE";
       if (resDecisionLabel) resDecisionLabel.textContent = "UNCERTAIN — MANUAL REVIEW REQUIRED";
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
@@ -482,10 +500,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
       }
     } else {
-      // Completed Defect Classification
-      const isDent = predictedClass === "dent";
+      // Stage C: Confident Damage Type Classification
+      const isDent = damageType === "dent";
       if (resDecisionBanner) resDecisionBanner.className = `decision-banner ${isDent ? "dent" : "crack"}`;
-      if (resDecisionTitle) resDecisionTitle.textContent = isDent ? "SURFACE DENT IDENTIFIED" : "FATIGUE CRACK IDENTIFIED";
+      if (resDecisionTitle) resDecisionTitle.textContent = isDent ? "STAGE C: SURFACE DENT IDENTIFIED" : "STAGE C: FATIGUE CRACK IDENTIFIED";
       if (resDecisionLabel) resDecisionLabel.textContent = isDent ? "SURFACE DENT DETECTED" : "FATIGUE CRACK DETECTED";
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
@@ -500,17 +518,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // Populate Technical Details Accordion
     if (telInspectionId) telInspectionId.textContent = data.inspection_id || "—";
     if (telProcessingTime) telProcessingTime.textContent = data.processing_time_ms ? `${data.processing_time_ms} ms` : "—";
-    if (telClipScore) {
-      const screening = data.domain_screening || {};
-      const inPct = screening.in_domain_score ? `${(screening.in_domain_score * 100).toFixed(1)}% In-Domain` : "—";
-      telClipScore.textContent = inPct;
-    }
+    if (telAircraftStatus) telAircraftStatus.textContent = data.aircraft_image_status || (isSupported ? "SUPPORTED" : "UNSUPPORTED");
+    if (telPresenceStatus) telPresenceStatus.textContent = data.damage_presence_status || "NOT_ASSESSED";
+    if (telDamageType) telDamageType.textContent = (data.damage_type || "NOT_ASSESSED").toUpperCase();
+    if (telUncertaintyStatus) telUncertaintyStatus.textContent = data.uncertainty_status || "—";
     if (telDecisionMargin) {
       telDecisionMargin.textContent = data.margin_from_decision !== null && data.margin_from_decision !== undefined
         ? `\u00B1 ${data.margin_from_decision.toFixed(4)}`
         : "N/A";
     }
-    if (telPreprocessing) telPreprocessing.textContent = data.preprocessing || "224\u00D7224 RGB, 1./255";
     if (telModelVersion) telModelVersion.textContent = data.model_version || "VGG16-AeroDamage-v1.0";
     if (resSafetyDisclaimer) resSafetyDisclaimer.textContent = data.disclaimer;
   }
