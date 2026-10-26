@@ -60,8 +60,36 @@ document.addEventListener("DOMContentLoaded", () => {
   const barScoreCrack = document.getElementById("bar-score-crack");
   const resEvidenceCard = document.getElementById("res-evidence-card");
   const resEvidenceText = document.getElementById("res-evidence-text");
-  const resActionBox = document.getElementById("res-action-box");
-  const resRecommendedAction = document.getElementById("res-recommended-action");
+  // Context inputs
+  const contextDetailsAccordion = document.getElementById("context-details-accordion");
+  const contextToggleLabel = document.getElementById("context-toggle-label");
+  const ctxManufacturer = document.getElementById("ctx-manufacturer");
+  const ctxModel = document.getElementById("ctx-model");
+  const ctxComponent = document.getElementById("ctx-component");
+  const ctxMaterial = document.getElementById("ctx-material");
+  const ctxLocation = document.getElementById("ctx-location");
+  const ctxNearJoint = document.getElementById("ctx-near-joint");
+  const ctxLength = document.getElementById("ctx-length");
+  const ctxWidth = document.getElementById("ctx-width");
+  const ctxDepth = document.getElementById("ctx-depth");
+  const ctxMethod = document.getElementById("ctx-method");
+  const ctxReference = document.getElementById("ctx-reference");
+  const ctxNotes = document.getElementById("ctx-notes");
+  const btnUpdateContext = document.getElementById("btn-update-context");
+  const btnClearContext = document.getElementById("btn-clear-context");
+  const contextSaveIndicator = document.getElementById("context-save-indicator");
+
+  // Dedicated Maintenance Decision Support elements
+  const resDamageAssessmentPanel = document.getElementById("res-damage-assessment-panel");
+  const resDispositionPill = document.getElementById("res-disposition-pill");
+  const resAssessmentHeading = document.getElementById("res-assessment-heading");
+  const resAssessmentSummary = document.getElementById("res-assessment-summary");
+  const resAssessmentRationale = document.getElementById("res-assessment-rationale");
+  const resActionStepsList = document.getElementById("res-action-steps-list");
+  const resReferencesContent = document.getElementById("res-references-content");
+  const resMissingInfoCard = document.getElementById("res-missing-info-card");
+  const resMissingInfoList = document.getElementById("res-missing-info-list");
+  const resLimitationsBanner = document.getElementById("res-limitations-banner");
   const btnExportReport = document.getElementById("btn-export-report");
   const btnExportJson = document.getElementById("btn-export-json");
 
@@ -392,6 +420,104 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // =========================================================================
+  // Inspection Context & Maintenance Decision Support Management
+  // =========================================================================
+  function getInspectionContextFromForm() {
+    const parseNum = (val) => {
+      if (val === "" || val === null || val === undefined) return null;
+      const n = parseFloat(val);
+      return isNaN(n) || n < 0 ? null : n;
+    };
+    return {
+      aircraft_manufacturer: ctxManufacturer?.value?.trim() || null,
+      aircraft_model: ctxModel?.value?.trim() || null,
+      component_id: ctxComponent?.value?.trim() || null,
+      structural_location: ctxLocation?.value?.trim() || null,
+      material: ctxMaterial?.value?.trim() || null,
+      damage_length_mm: parseNum(ctxLength?.value),
+      damage_width_mm: parseNum(ctxWidth?.value),
+      damage_depth_mm: parseNum(ctxDepth?.value),
+      measurement_method: ctxMethod?.value?.trim() || null,
+      maintenance_reference: ctxReference?.value?.trim() || null,
+      inspection_notes: ctxNotes?.value?.trim() || null,
+      is_near_joint_or_fastener: ctxNearJoint?.checked ? true : null,
+    };
+  }
+
+  function clearInspectionContextForm() {
+    if (ctxManufacturer) ctxManufacturer.value = "";
+    if (ctxModel) ctxModel.value = "";
+    if (ctxComponent) ctxComponent.value = "";
+    if (ctxMaterial) ctxMaterial.value = "";
+    if (ctxLocation) ctxLocation.value = "";
+    if (ctxNearJoint) ctxNearJoint.checked = false;
+    if (ctxLength) ctxLength.value = "";
+    if (ctxWidth) ctxWidth.value = "";
+    if (ctxDepth) ctxDepth.value = "";
+    if (ctxMethod) ctxMethod.value = "";
+    if (ctxReference) ctxReference.value = "";
+    if (ctxNotes) ctxNotes.value = "";
+    if (contextSaveIndicator) contextSaveIndicator.textContent = "Cleared";
+  }
+
+  contextDetailsAccordion?.addEventListener("toggle", () => {
+    if (contextToggleLabel) {
+      contextToggleLabel.textContent = contextDetailsAccordion.open ? "Collapse" : "Expand";
+    }
+  });
+
+  btnUpdateContext?.addEventListener("click", async () => {
+    if (contextSaveIndicator) contextSaveIndicator.textContent = "Updating...";
+    const ctx = getInspectionContextFromForm();
+
+    if (currentInspectionResult) {
+      try {
+        const res = await fetch("/api/recommendation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            predicted_class: currentInspectionResult.predicted_class,
+            model_score: currentInspectionResult.model_score,
+            uncertainty_status: currentInspectionResult.uncertainty_status,
+            context: ctx,
+            inspection_id: currentInspectionResult.inspection_id,
+            uncertainty_reason: currentInspectionResult.decision_message,
+          }),
+        });
+
+        if (res.ok) {
+          const rec = await res.json();
+          currentInspectionResult.assessment_status = rec.assessment_status;
+          currentInspectionResult.qualified_heading = rec.qualified_heading;
+          currentInspectionResult.summary = rec.summary;
+          currentInspectionResult.recommended_actions = rec.recommended_actions;
+          currentInspectionResult.maintenance_references = rec.maintenance_references;
+          currentInspectionResult.missing_information = rec.missing_information;
+          currentInspectionResult.limitations = rec.limitations;
+          currentInspectionResult.rationale = rec.rationale;
+          currentInspectionResult.context_used = rec.context_used;
+          currentInspectionResult.recommendation = rec;
+          renderMaintenanceDecisionSupport(currentInspectionResult);
+          if (contextSaveIndicator) contextSaveIndicator.textContent = "Saved & Updated";
+        } else {
+          if (contextSaveIndicator) contextSaveIndicator.textContent = "Error updating";
+        }
+      } catch (e) {
+        if (contextSaveIndicator) contextSaveIndicator.textContent = "Error updating";
+      }
+    } else {
+      if (contextSaveIndicator) contextSaveIndicator.textContent = "Parameters Saved";
+    }
+  });
+
+  btnClearContext?.addEventListener("click", async () => {
+    clearInspectionContextForm();
+    if (currentInspectionResult) {
+      btnUpdateContext?.click();
+    }
+  });
+
+  // =========================================================================
   // Execute Inspection Pipeline
   // =========================================================================
   btnRunAnalysis?.addEventListener("click", async () => {
@@ -403,6 +529,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const formData = new FormData();
     formData.append("file", currentAnalysisBlob);
+    const ctx = getInspectionContextFromForm();
+    formData.append("context", JSON.stringify(ctx));
 
     try {
       const res = await fetch("/api/analyze", {
@@ -428,6 +556,97 @@ document.addEventListener("DOMContentLoaded", () => {
       if (analysisBtnText) analysisBtnText.textContent = "Analyze Inspection Image";
     }
   });
+
+  function renderMaintenanceDecisionSupport(data) {
+    if (!resDamageAssessmentPanel) return;
+
+    // Heading
+    if (resAssessmentHeading) {
+      resAssessmentHeading.textContent = data.qualified_heading || "Surface Damage Assessment";
+    }
+
+    // Disposition Status Pill
+    if (resDispositionPill) {
+      const rawStatus = data.assessment_status || "awaiting_inspection";
+      resDispositionPill.textContent = rawStatus.replace(/_/g, " ").toUpperCase();
+      resDispositionPill.className = `disposition-pill status-${rawStatus.replace(/_/g, "-")}`;
+    }
+
+    // Assessment Summary & Rationale
+    if (resAssessmentSummary) {
+      resAssessmentSummary.textContent = data.summary || data.decision_message || "—";
+    }
+    if (resAssessmentRationale) {
+      resAssessmentRationale.textContent = data.rationale ? `Operational Rationale: ${data.rationale}` : "";
+    }
+
+    // Ordered Recommended Actions
+    if (resActionStepsList) {
+      const actions = data.recommended_actions || [];
+      if (actions.length > 0) {
+        resActionStepsList.innerHTML = actions.map(act => {
+          const srcStatus = (act.source_status || "general_inspection_guidance").toLowerCase();
+          const badgeText = srcStatus.replace(/_/g, " ");
+          return `
+            <li class="action-step-item">
+              <strong>Step ${act.step}:</strong> ${act.action}
+              <div><span class="source-badge ${srcStatus}">${badgeText}</span></div>
+            </li>
+          `;
+        }).join("");
+      } else {
+        const fallback = data.recommended_action || "Schedule manual visual inspection by qualified personnel.";
+        resActionStepsList.innerHTML = `
+          <li class="action-step-item">
+            <strong>Step 1:</strong> ${fallback}
+            <div><span class="source-badge general_inspection_guidance">general inspection guidance</span></div>
+          </li>
+        `;
+      }
+    }
+
+    // Applicable Maintenance References
+    if (resReferencesContent) {
+      const refs = data.maintenance_references || [];
+      if (refs.length > 0) {
+        resReferencesContent.innerHTML = refs.map(r => {
+          const isVerified = r.verified === true;
+          const tagClass = isVerified ? "verified" : "unverified";
+          const tagText = isVerified ? "VERIFIED" : "UNVERIFIED / UNAVAILABLE";
+          return `
+            <div class="ref-item-row">
+              <div class="ref-title-line">
+                <span>${r.document_title || "Maintenance Document"}</span>
+                <span class="ref-verified-tag ${tagClass}">${tagText}</span>
+              </div>
+              <div class="ref-section-line">${r.document_id || ""} ${r.applicable_section ? "— " + r.applicable_section : ""}</div>
+              ${r.applicability_notes ? `<div class="ref-notes-line">${r.applicability_notes}</div>` : ""}
+            </div>
+          `;
+        }).join("");
+      } else {
+        resReferencesContent.innerHTML = `
+          <p class="reference-unavailable-notice">Applicable approved maintenance data is not available in this system. Obtain the current approved documentation for the aircraft and affected component before determining the repair.</p>
+        `;
+      }
+    }
+
+    // Missing Information
+    if (resMissingInfoCard && resMissingInfoList) {
+      const missing = data.missing_information || [];
+      if (missing.length > 0) {
+        resMissingInfoCard.style.display = "block";
+        resMissingInfoList.innerHTML = missing.map(m => `<li>${m}</li>`).join("");
+      } else {
+        resMissingInfoCard.style.display = "none";
+      }
+    }
+
+    // Limitations Banner
+    if (resLimitationsBanner && data.limitations && data.limitations.length > 0) {
+      resLimitationsBanner.innerHTML = `<strong>SAFETY DIRECTIVE:</strong> ${data.limitations[0]}`;
+    }
+  }
 
   function displayAnalysisResult(data) {
     if (analysisEmptyState) analysisEmptyState.style.display = "none";
@@ -467,11 +686,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
       if (resScoresBlock) resScoresBlock.style.display = "none";
-
-      if (resActionBox) {
-        resActionBox.className = "action-recommendation-box";
-        if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
-      }
     } else if (status === "DAMAGE_PRESENCE_UNVERIFIED" || presenceStatus === "NOT_ASSESSED") {
       // Stage B: Ordinary Aircraft Image Accepted — Damage Presence Unverified
       if (resDecisionBanner) resDecisionBanner.className = "decision-banner unverified";
@@ -479,13 +693,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (resDecisionLabel) resDecisionLabel.textContent = "NO VERIFIED DAMAGE FINDING";
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
-      // Crucial: Suppress score bars for ordinary aircraft
+      // Suppress score bars for ordinary aircraft
       if (resScoresBlock) resScoresBlock.style.display = "none";
-
-      if (resActionBox) {
-        resActionBox.className = "action-recommendation-box";
-        if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
-      }
     } else if (status === "UNCERTAIN" || damageType === "UNCERTAIN") {
       // Stage C: Damage Detected but Ambiguous Defect Type
       if (resDecisionBanner) resDecisionBanner.className = "decision-banner uncertain";
@@ -494,11 +703,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
       renderScoreBars(data);
-
-      if (resActionBox) {
-        resActionBox.className = "action-recommendation-box";
-        if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
-      }
     } else {
       // Stage C: Confident Damage Type Classification
       const isDent = damageType === "dent";
@@ -508,12 +712,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (resDecisionMessage) resDecisionMessage.textContent = data.decision_message;
 
       renderScoreBars(data);
-
-      if (resActionBox) {
-        resActionBox.className = `action-recommendation-box ${isDent ? "" : "crack"}`;
-        if (resRecommendedAction) resRecommendedAction.textContent = data.recommended_action;
-      }
     }
+
+    // Render Dedicated Maintenance Decision Support Section
+    renderMaintenanceDecisionSupport(data);
 
     // Populate Technical Details Accordion
     if (telInspectionId) telInspectionId.textContent = data.inspection_id || "—";

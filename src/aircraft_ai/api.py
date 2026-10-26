@@ -3,9 +3,9 @@
 import io
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -180,12 +180,16 @@ def get_dataset_info() -> Dict[str, Any]:
 
 
 @app.post("/api/analyze")
-async def analyze_damage_endpoint(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def analyze_damage_endpoint(
+    file: UploadFile = File(...),
+    context: Optional[str] = Form(None),
+) -> Dict[str, Any]:
     """Execute complete 4-stage damage inspection:
     Stage 1: Image validation and safe RGB decoding.
     Stage 2: Semantic aircraft-image relevance screening (CLIP OOD rejection).
     Stage 3: VGG16 binary classification (only if domain accepted).
     Stage 4: Confidence scoring and uncertainty evaluation.
+    Maintenance Decision Support: Damage-specific repair and inspection guidance.
     """
     if not config.MODEL_SAVE_PATH.exists():
         raise HTTPException(
@@ -196,13 +200,21 @@ async def analyze_damage_endpoint(file: UploadFile = File(...)) -> Dict[str, Any
     file_bytes = await file.read()
     image = validate_uploaded_image(file_bytes, filename=file.filename)
 
+    parsed_context = None
+    if context:
+        try:
+            parsed_context = json.loads(context)
+        except Exception as e:
+            logger.warning("Failed to parse context JSON: %s", e)
+
     try:
-        result = analyze_image(image)
+        result = analyze_image(image, context=parsed_context)
         logger.info(
-            "Analysis complete for '%s': status=%s, class=%s",
+            "Analysis complete for '%s': status=%s, class=%s, assessment_status=%s",
             file.filename,
             result["status"],
             result.get("predicted_class"),
+            result.get("assessment_status"),
         )
         return result
     except Exception as e:
@@ -214,9 +226,45 @@ async def analyze_damage_endpoint(file: UploadFile = File(...)) -> Dict[str, Any
 
 
 @app.post("/api/classify")
-async def classify_damage_endpoint(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def classify_damage_endpoint(
+    file: UploadFile = File(...),
+    context: Optional[str] = Form(None),
+) -> Dict[str, Any]:
     """Classify damage using the multi-stage guarded analysis pipeline."""
-    return await analyze_damage_endpoint(file=file)
+    return await analyze_damage_endpoint(file=file, context=context)
+
+
+@app.post("/api/recommendation")
+async def evaluate_recommendation_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Evaluate damage-specific maintenance guidance based on inspector-supplied context
+
+    without needing to re-run neural network image inference.
+    """
+    from aircraft_ai.maintenance import get_damage_recommendation
+
+    predicted_class = payload.get("predicted_class")
+    model_score = payload.get("model_score")
+    uncertainty_status = payload.get("uncertainty_status", "confident")
+    context = payload.get("context")
+    inspection_id = payload.get("inspection_id")
+    uncertainty_reason = payload.get("uncertainty_reason")
+
+    try:
+        rec = get_damage_recommendation(
+            predicted_class=predicted_class,
+            model_score=model_score,
+            uncertainty_status=uncertainty_status,
+            context=context,
+            inspection_id=inspection_id,
+            uncertainty_reason=uncertainty_reason,
+        )
+        return rec.to_dict()
+    except Exception as e:
+        logger.error("Maintenance recommendation evaluation failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Recommendation evaluation error: {str(e)}",
+        )
 
 
 
@@ -341,7 +389,10 @@ def get_example_image(name: str):
 
 @app.post("/api/inspection/report/html")
 async def generate_inspection_report_html(data: Dict[str, Any]):
-    """Generate a printable HTML aerospace Non-Destructive Inspection (NDI) report document."""
+    """Generate a printable HTML aerospace Non-Destructive Inspection (NDI) report document
+
+    incorporating damage assessment, recommended actions, inspector context, and verified references.
+    """
     from fastapi.responses import HTMLResponse
 
     inspection_id = data.get("inspection_id", "INS-UNKNOWN")
@@ -350,16 +401,86 @@ async def generate_inspection_report_html(data: Dict[str, Any]):
     aircraft_status = data.get("aircraft_image_status", "SUPPORTED")
     presence_status = data.get("damage_presence_status", "NOT_ASSESSED")
     damage_type = (data.get("damage_type") or data.get("predicted_class") or "NOT_ASSESSED").upper()
-    pred_class = (data.get("predicted_class") or data.get("damage_type") or "NOT_ASSESSED").upper()
     model_score = data.get("model_score")
     score_display = f"{float(model_score) * 100:.2f}%" if model_score is not None else "N/A (Damage presence unverified)"
-    recommended_action = data.get("recommended_action", "Conduct manual visual inspection.")
     decision_message = data.get("decision_message", "")
     processing_time = data.get("processing_time_ms", 0)
+
+    # Maintenance Recommendation Fields
+    assessment_status = data.get("assessment_status", "awaiting_inspection").replace("_", " ").upper()
+    qualified_heading = data.get("qualified_heading", f"Defect Status: {damage_type}")
+    summary = data.get("summary", decision_message)
+    recommended_actions = data.get("recommended_actions", [])
+    maintenance_references = data.get("maintenance_references", [])
+    missing_info = data.get("missing_information", [])
+    limitations = data.get("limitations", [config.SAFETY_DISCLAIMER])
+    context_used = data.get("context_used", {})
+
     loc = data.get("localization") or {}
     overlay_b64 = loc.get("overlay_data_url", "")
     heatmap_b64 = loc.get("heatmap_data_url", "")
-    disclaimer = data.get("disclaimer", config.SAFETY_DISCLAIMER)
+
+    # Build action steps HTML list
+    if recommended_actions:
+        actions_html = "<ol style='padding-left: 20px; margin: 8px 0;'>"
+        for act in recommended_actions:
+            step_num = act.get("step", 1)
+            action_text = act.get("action", "")
+            src_status = act.get("source_status", "general_inspection_guidance").replace("_", " ")
+            actions_html += f"""
+            <li style='margin-bottom: 8px;'>
+              <strong>Step {step_num}:</strong> {action_text}
+              <div style='margin-top: 2px;'><span class='source-badge'>{src_status}</span></div>
+            </li>"""
+        actions_html += "</ol>"
+    else:
+        fallback_action = data.get("recommended_action", "Conduct manual visual inspection.")
+        actions_html = f"<p><strong>Step 1:</strong> {fallback_action}</p>"
+
+    # Build references HTML table
+    if maintenance_references:
+        refs_html = """<table class='sub-table'>
+          <tr><th>Document Title</th><th>ID / Section</th><th>Status</th><th>Applicability Notes</th></tr>"""
+        for r in maintenance_references:
+            is_v = r.get("verified", False)
+            v_badge = "<span style='color: #15803d; font-weight: 600;'>VERIFIED</span>" if is_v else "<span style='color: #b45309; font-weight: 600;'>UNVERIFIED / UNAVAILABLE</span>"
+            refs_html += f"""<tr>
+              <td><strong>{r.get('document_title', 'N/A')}</strong></td>
+              <td>{r.get('document_id', 'N/A')} &mdash; {r.get('applicable_section', 'N/A')}</td>
+              <td>{v_badge}</td>
+              <td style='font-size: 12px;'>{r.get('applicability_notes', '')}</td>
+            </tr>"""
+        refs_html += "</table>"
+    else:
+        refs_html = "<p style='color: #64748b; font-style: italic;'>Applicable approved maintenance data is not available in this system. Obtain current approved documentation for the aircraft before determining repair.</p>"
+
+    # Missing info HTML
+    if missing_info:
+        missing_html = "<ul style='margin: 4px 0; padding-left: 20px; color: #b45309;'>"
+        for item in missing_info:
+            missing_html += f"<li>{item}</li>"
+        missing_html += "</ul>"
+    else:
+        missing_html = "<p style='color: #15803d; margin: 4px 0;'>All required physical and context parameters provided.</p>"
+
+    # Limitations HTML
+    limits_html = "<ul style='margin: 4px 0; padding-left: 20px; font-size: 12px; color: #92400e;'>"
+    for lim in limitations:
+        limits_html += f"<li>{lim}</li>"
+    limits_html += "</ul>"
+
+    # Measurements extraction
+    meas_len = context_used.get("damage_length_mm")
+    meas_wid = context_used.get("damage_width_mm")
+    meas_dep = context_used.get("damage_depth_mm")
+    if meas_len is not None and meas_wid is not None:
+        meas_str = f"{meas_len:.1f} mm (L) &times; {meas_wid:.1f} mm (W)"
+        if meas_dep is not None:
+            meas_str += f" &times; {meas_dep:.2f} mm (Depth)"
+    elif meas_dep is not None:
+        meas_str = f"Depth: {meas_dep:.2f} mm (Length/Width unmeasured)"
+    else:
+        meas_str = "Dimensions unmeasured (cannot be established from 2D photograph alone)"
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -385,22 +506,55 @@ async def generate_inspection_report_html(data: Dict[str, Any]):
     .ref-block {{ text-align: right; font-size: 13px; font-family: monospace; }}
     .status-badge {{
       display: inline-block;
-      padding: 4px 12px;
+      padding: 6px 14px;
       font-weight: 700;
       border-radius: 4px;
-      font-size: 14px;
+      font-size: 13px;
       margin-bottom: 16px;
       background: #f1f5f9;
       color: #0f172a;
       border: 1px solid #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }}
     .status-badge.crack {{ background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }}
     .status-badge.dent {{ background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }}
     .status-badge.uncertain {{ background: #fffbeb; color: #b45309; border-color: #fde68a; }}
-    .status-badge.damage_presence_unverified {{ background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }}
-    table {{ width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }}
+    .status-badge.measurements_required {{ background: #fff7ed; color: #c2410c; border-color: #fdba74; }}
+    .status-badge.qualified_assessment_required {{ background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }}
+    .status-badge.awaiting_authorized_disposition {{ background: #f0fdf4; color: #15803d; border-color: #86efac; }}
+    .source-badge {{
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      border-radius: 3px;
+      background: #e2e8f0;
+      color: #475569;
+    }}
+    table {{ width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }}
     th, td {{ padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; }}
     th {{ background: #f8fafc; font-weight: 600; width: 30%; }}
+    .sub-table th {{ width: auto; font-size: 12px; }}
+    .section-title {{
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 24px 0 8px 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }}
+    .recommendation-panel {{
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #2563eb;
+      border-radius: 4px;
+      padding: 16px;
+      margin: 16px 0;
+    }}
     .evidence-grid {{ display: flex; gap: 20px; margin: 20px 0; }}
     .evidence-card {{ flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; text-align: center; }}
     .evidence-card img {{ max-width: 100%; height: auto; max-height: 240px; border-radius: 4px; object-fit: contain; }}
@@ -436,7 +590,7 @@ async def generate_inspection_report_html(data: Dict[str, Any]):
   <div class="header">
     <div>
       <div class="title">AERODAMAGE AI — STRUCTURAL INSPECTION RECORD</div>
-      <div class="subtitle">AI-Assisted Aerospace Non-Destructive Visual Inspection Document</div>
+      <div class="subtitle">AI-Assisted Aerospace Non-Destructive Visual Inspection & Decision Support</div>
     </div>
     <div class="ref-block">
       <div><strong>Record ID:</strong> {inspection_id}</div>
@@ -445,15 +599,29 @@ async def generate_inspection_report_html(data: Dict[str, Any]):
     </div>
   </div>
 
-  <div class="status-badge {status_code.lower()}">INSPECTION STATUS: {status_code} — {damage_type}</div>
+  <div style="margin-bottom: 12px;">
+    <span class="status-badge {status_code.lower()}">CLASSIFICATION: {status_code} — {damage_type}</span>
+    <span class="status-badge {assessment_status.lower().replace(' ', '_')}">DISPOSITION STATUS: {assessment_status}</span>
+  </div>
 
+  <div class="section-title">1. Inspector-Supplied Aircraft & Component Context</div>
+  <table>
+    <tr><th>Aircraft Manufacturer / Model</th><td>{context_used.get('aircraft_manufacturer') or 'Unknown'} / {context_used.get('aircraft_model') or 'Unknown'}</td></tr>
+    <tr><th>Component / Zone ID</th><td>{context_used.get('component_id') or 'Not specified'}</td></tr>
+    <tr><th>Structural Location / Proximity</th><td>{context_used.get('structural_location') or 'Not specified'} {f"(Critical Feature Alert)" if context_used.get('is_near_joint_or_fastener') else ""}</td></tr>
+    <tr><th>Panel Material</th><td>{context_used.get('material') or 'Unknown / Unspecified'}</td></tr>
+    <tr><th>Inspector Physical Measurements</th><td><strong>{meas_str}</strong></td></tr>
+    <tr><th>Measurement Instrument / Method</th><td>{context_used.get('measurement_method') or 'Not recorded'}</td></tr>
+    <tr><th>Inspector Notes</th><td>{context_used.get('inspection_notes') or 'None recorded'}</td></tr>
+  </table>
+
+  <div class="section-title">2. Computer Vision Inference & Diagnostics</div>
   <table>
     <tr><th>Stage A: Aircraft Image Status</th><td><strong>{aircraft_status}</strong></td></tr>
     <tr><th>Stage B: Damage Presence</th><td><strong>{presence_status}</strong></td></tr>
-    <tr><th>Stage C: Damage Type</th><td><strong>{damage_type}</strong></td></tr>
-    <tr><th>Model Score</th><td>{score_display}</td></tr>
+    <tr><th>Stage C: Defect Classification</th><td><strong>{damage_type}</strong></td></tr>
+    <tr><th>Model Activation Score</th><td>{score_display}</td></tr>
     <tr><th>Diagnostic Finding</th><td>{decision_message}</td></tr>
-    <tr><th>Recommended Operational Action</th><td><strong>{recommended_action}</strong></td></tr>
     <tr><th>Inference Duration</th><td>{processing_time} ms</td></tr>
     <tr><th>Model Architecture</th><td>VGG16 (ImageNet Backbone Frozen) + Pre-Activation Grad-CAM Head</td></tr>
   </table>
@@ -470,10 +638,31 @@ async def generate_inspection_report_html(data: Dict[str, Any]):
     </div>
   </div>
 
+  <div class="section-title">3. DAMAGE ASSESSMENT & RECOMMENDED ACTION</div>
+  <div class="recommendation-panel">
+    <h3 style="margin-top: 0; color: #0f172a;">{qualified_heading}</h3>
+    <p><strong>Assessment Summary:</strong> {summary}</p>
+    
+    <div style="margin-top: 16px;">
+      <strong>Recommended Next Steps (Ordered Workflow):</strong>
+      {actions_html}
+    </div>
+
+    <div style="margin-top: 16px;">
+      <strong>Applicable Verified Maintenance References:</strong>
+      {refs_html}
+    </div>
+
+    <div style="margin-top: 16px;">
+      <strong>Missing Context & Unverified Parameters:</strong>
+      {missing_html}
+    </div>
+  </div>
+
   <div class="disclaimer-box">
     <strong>OPERATIONAL LIMITATION & SAFETY NOTICE:</strong><br>
-    {disclaimer}<br>
-    This automated inspection record is an AI-assisted decision support artifact. It does NOT constitute a certified airworthiness approval, return-to-service authorization, or certified NDT sign-off. Defect verification and repair disposition must be conducted by a licensed A&P / Part 66 aircraft maintenance engineer.
+    {limits_html}
+    <p style="margin: 6px 0 0 0;">This automated inspection record is an AI-assisted decision support artifact. It does NOT constitute a certified airworthiness approval, return-to-service authorization, or certified NDT sign-off. Defect verification, measurement confirmation, and repair disposition must be conducted by licensed A&P / Part 66 aircraft maintenance personnel.</p>
   </div>
 
   <div class="signoff-grid">

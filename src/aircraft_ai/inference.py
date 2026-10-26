@@ -5,7 +5,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
@@ -155,6 +155,7 @@ def analyze_image(
     classification_threshold: float = config.CLASSIFICATION_THRESHOLD,
     domain_threshold: float = config.DOMAIN_ACCEPTANCE_THRESHOLD,
     uncertainty_margin: float = config.UNCERTAINTY_MARGIN,
+    context: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Execute the multi-stage aerospace damage inspection pipeline:
     
@@ -163,6 +164,7 @@ def analyze_image(
               evidence or represents an ordinary / intact aircraft photograph.
     Stage C — Damage type classification: VGG16 academic baseline (dent vs crack), executed ONLY
               when damage presence permits classification.
+    Maintenance Decision Support — Technically grounded, damage-specific maintenance recommendation.
     """
     start_time = time.perf_counter()
     inspection_id = f"INS-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
@@ -171,6 +173,7 @@ def analyze_image(
 
     from aircraft_ai.domain_screening import assess_damage_presence, screen_image_domain
     from aircraft_ai.gradcam import compute_gradcam
+    from aircraft_ai.maintenance import get_damage_recommendation
 
     # -------------------------------------------------------------------------
     # Stage A: Aircraft Image Validation
@@ -184,6 +187,14 @@ def analyze_image(
             domain_res["matched_category"],
             domain_res["in_domain_score"],
             domain_threshold,
+        )
+        rec = get_damage_recommendation(
+            predicted_class=None,
+            model_score=None,
+            uncertainty_status=config.UNCERTAINTY_OUT_OF_DOMAIN,
+            context=context,
+            inspection_id=inspection_id,
+            uncertainty_reason=f"Non-aircraft category ({domain_res['matched_category']})",
         )
         return {
             "inspection_id": inspection_id,
@@ -210,9 +221,22 @@ def analyze_image(
                 "Please upload a relevant aircraft surface photograph."
             ),
             "recommended_action": (
-                "Upload a clear, properly illuminated close-up photograph of an aircraft structural metallic "
-                "or composite panel. Non-aircraft images are rejected to avoid erroneous classification."
+                rec.recommended_actions[0].action if rec.recommended_actions else (
+                    "Upload a clear, properly illuminated close-up photograph of an aircraft structural metallic "
+                    "or composite panel. Non-aircraft images are rejected to avoid erroneous classification."
+                )
             ),
+            # Dedicated Maintenance Decision Support Section fields
+            "assessment_status": rec.assessment_status,
+            "qualified_heading": rec.qualified_heading,
+            "summary": rec.summary,
+            "recommended_actions": [a.to_dict() for a in rec.recommended_actions],
+            "maintenance_references": [r.to_dict() for r in rec.maintenance_references],
+            "missing_information": rec.missing_information,
+            "limitations": rec.limitations,
+            "rationale": rec.rationale,
+            "context_used": rec.context_used,
+            "recommendation": rec.to_dict(),
             "raw_dent_score": None,
             "raw_crack_score": None,
             "confidence": domain_res["out_of_domain_score"],
@@ -247,6 +271,14 @@ def analyze_image(
             presence_res["intact_score"],
             presence_res["damage_score"],
         )
+        rec = get_damage_recommendation(
+            predicted_class=None,
+            model_score=None,
+            uncertainty_status=config.UNCERTAINTY_DAMAGE_PRESENCE_UNVERIFIED,
+            context=context,
+            inspection_id=inspection_id,
+            uncertainty_reason="Damage presence unverified in photograph",
+        )
         return {
             "inspection_id": inspection_id,
             "timestamp": timestamp_iso,
@@ -268,11 +300,24 @@ def analyze_image(
             "class_scores": None,
             "decision_message": config.DAMAGE_PRESENCE_UNVERIFIED_MESSAGE,
             "recommended_action": (
-                "Aircraft photograph accepted, but the current VGG16 model is a binary dent-versus-crack classifier "
-                "trained exclusively on damaged panels. It cannot reliably determine whether an aircraft is damaged or undamaged. "
-                "For defect assessment, upload a high-resolution close-up technical inspection photograph of the specific panel under review, "
-                "or conduct manual visual / NDT inspection in accordance with the Structural Repair Manual (SRM Chapter 51)."
+                rec.recommended_actions[0].action if rec.recommended_actions else (
+                    "Aircraft photograph accepted, but the current VGG16 model is a binary dent-versus-crack classifier "
+                    "trained exclusively on damaged panels. It cannot reliably determine whether an aircraft is damaged or undamaged. "
+                    "For defect assessment, upload a high-resolution close-up technical inspection photograph of the specific panel under review, "
+                    "or conduct manual visual / NDT inspection in accordance with the Structural Repair Manual (SRM Chapter 51)."
+                )
             ),
+            # Dedicated Maintenance Decision Support Section fields
+            "assessment_status": rec.assessment_status,
+            "qualified_heading": rec.qualified_heading,
+            "summary": rec.summary,
+            "recommended_actions": [a.to_dict() for a in rec.recommended_actions],
+            "maintenance_references": [r.to_dict() for r in rec.maintenance_references],
+            "missing_information": rec.missing_information,
+            "limitations": rec.limitations,
+            "rationale": rec.rationale,
+            "context_used": rec.context_used,
+            "recommendation": rec.to_dict(),
             "raw_dent_score": None,
             "raw_crack_score": None,
             "confidence": presence_res["intact_score"],
@@ -313,10 +358,13 @@ def analyze_image(
             f"(P(dent)={dent_score:.4f}, margin={margin_from_decision:.4f} < {uncertainty_margin:.2f}). "
             "The model cannot confidently distinguish dent from crack. Manual inspection is recommended."
         )
-        recommended_action = (
-            "Model score is in the ambiguity band (|P(dent) - 0.50| < 0.12). Do NOT rely on automated "
-            "classification. Conduct General Visual Inspection (GVI) and Detailed Inspection (DET) "
-            "under 10x magnification with oblique lighting per NDT manual."
+        rec = get_damage_recommendation(
+            predicted_class="uncertain",
+            model_score=round(dent_score, 4),
+            uncertainty_status=config.UNCERTAINTY_UNCERTAIN,
+            context=context,
+            inspection_id=inspection_id,
+            uncertainty_reason=decision_message,
         )
         target_gradcam_class = "dent" if dent_score >= 0.5 else "crack"
     else:
@@ -327,18 +375,14 @@ def analyze_image(
         predicted_class_id = class_res["predicted_class_id"]
         decision_message = f"Defect classified as {damage_type.upper()} based on structural visual features."
         target_gradcam_class = damage_type
-        if damage_type == "crack":
-            recommended_action = (
-                "CRITICAL: Suspected fatigue crack discontinuity detected. Immediately tag component and restrict "
-                "from service pending Non-Destructive Testing (High-Frequency Eddy Current / Ultrasonic Inspection per "
-                "SRM Chapter 51) to verify crack length and tip arrest."
-            )
-        else:
-            recommended_action = (
-                "Log dent depth and diameter with depth micrometer. Check proximity to nearest frame, stringer, or rivet "
-                "line in accordance with Structural Repair Manual (SRM) Chapter 51 / 53 allowable damage limits. "
-                "Schedule NDT verification."
-            )
+        active_score = round(dent_score if predicted_class == "dent" else crack_score, 4)
+        rec = get_damage_recommendation(
+            predicted_class=damage_type,
+            model_score=active_score,
+            uncertainty_status=config.UNCERTAINTY_CONFIDENT,
+            context=context,
+            inspection_id=inspection_id,
+        )
 
     # Visual Damage Explainability (Grad-CAM on block5_conv3)
     localization = compute_gradcam(
@@ -372,7 +416,20 @@ def analyze_image(
             "crack": round(crack_score, 4),
         },
         "decision_message": decision_message,
-        "recommended_action": recommended_action,
+        "recommended_action": rec.recommended_actions[0].action if rec.recommended_actions else (
+            "Schedule manual inspection by qualified aircraft maintenance technician."
+        ),
+        # Dedicated Maintenance Decision Support Section fields
+        "assessment_status": rec.assessment_status,
+        "qualified_heading": rec.qualified_heading,
+        "summary": rec.summary,
+        "recommended_actions": [a.to_dict() for a in rec.recommended_actions],
+        "maintenance_references": [r.to_dict() for r in rec.maintenance_references],
+        "missing_information": rec.missing_information,
+        "limitations": rec.limitations,
+        "rationale": rec.rationale,
+        "context_used": rec.context_used,
+        "recommendation": rec.to_dict(),
         "raw_dent_score": dent_score,
         "raw_crack_score": crack_score,
         "confidence": class_res["confidence"],

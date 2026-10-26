@@ -222,6 +222,99 @@
             </div>
           </div>
 
+          <!-- Inspection Context & Physical Parameters (Optional Inspector Input) -->
+          <details class="context-details-accordion" id="context-details-accordion">
+            <summary class="context-summary">
+              <span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: text-bottom; margin-right: 6px;">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                Inspection Context &amp; Physical Parameters (Optional)
+              </span>
+              <span class="context-toggle-badge" id="context-toggle-label">Expand</span>
+            </summary>
+            <div class="context-form-content">
+              <p class="context-form-desc">
+                Supply aircraft, component, or measured dimensions to receive tailored maintenance guidance and evaluate allowable damage limits.
+              </p>
+              
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="ctx-manufacturer">Aircraft Manufacturer</label>
+                  <input type="text" id="ctx-manufacturer" class="ctx-input" placeholder="e.g. Boeing, Airbus">
+                </div>
+                <div class="form-group">
+                  <label for="ctx-model">Model / Variant</label>
+                  <input type="text" id="ctx-model" class="ctx-input" placeholder="e.g. B737-800, A320-200">
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="ctx-component">Component / Zone ID</label>
+                  <input type="text" id="ctx-component" class="ctx-input" placeholder="e.g. Fuselage Skin Stn 420">
+                </div>
+                <div class="form-group">
+                  <label for="ctx-material">Structural Material</label>
+                  <input type="text" id="ctx-material" class="ctx-input" placeholder="e.g. 2024-T3 Al, CFRP">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="ctx-location">Structural Location &amp; Panel Bay</label>
+                <input type="text" id="ctx-location" class="ctx-input" placeholder="e.g. Crown panel between stringers 12R-13R">
+              </div>
+
+              <div class="form-checkbox-row">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="ctx-near-joint">
+                  <span>Defect is within / adjacent to fastener line, lap joint, frame, or stringer boundary</span>
+                </label>
+              </div>
+
+              <div class="form-section-label">Inspector Physical Measurements (Calibrated Tools)</div>
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label for="ctx-length">Length (mm)</label>
+                  <input type="number" id="ctx-length" class="ctx-input" step="0.1" min="0" placeholder="0.0">
+                </div>
+                <div class="form-group">
+                  <label for="ctx-width">Width (mm)</label>
+                  <input type="number" id="ctx-width" class="ctx-input" step="0.1" min="0" placeholder="0.0">
+                </div>
+                <div class="form-group">
+                  <label for="ctx-depth">Depth (mm)</label>
+                  <input type="number" id="ctx-depth" class="ctx-input" step="0.01" min="0" placeholder="0.00">
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="ctx-method">Measurement Tool / Method</label>
+                  <input type="text" id="ctx-method" class="ctx-input" placeholder="e.g. Dial depth gauge, Depth micrometer">
+                </div>
+                <div class="form-group">
+                  <label for="ctx-reference">Maintenance Reference</label>
+                  <input type="text" id="ctx-reference" class="ctx-input" placeholder="e.g. SRM 51-10-01, AC 43.13-1B">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="ctx-notes">Inspector Notes &amp; Observations</label>
+                <textarea id="ctx-notes" class="ctx-textarea" rows="2" placeholder="Visual appearance, surface finish, paint flaking..."></textarea>
+              </div>
+
+              <div class="context-actions-row">
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-update-context">Update Recommendation</button>
+                <button type="button" class="btn btn-sm btn-outline" id="btn-clear-context">Clear Context</button>
+                <span class="context-save-indicator" id="context-save-indicator">Ready</span>
+              </div>
+            </div>
+          </details>
+
           <div style="margin-top: 1rem;">
             <button class="btn btn-primary btn-block" id="btn-run-analysis" disabled>
               <span class="spinner" id="analysis-spinner" style="display: none;"></span>
@@ -239,7 +332,7 @@
                 <line x1="12" y1="20" x2="12" y2="4"/>
                 <line x1="6" y1="20" x2="6" y2="14"/>
               </svg>
-              Inspection Findings & Recommendations
+              Inspection Findings &amp; Maintenance Decision Support
             </h3>
             <span class="badge" id="decision-threshold-badge">Threshold = 0.50</span>
           </div>
@@ -310,19 +403,77 @@
                 </p>
               </div>
 
-              <!-- Recommended Next Action (Operational Guidance) -->
-              <div class="action-recommendation-box" id="res-action-box">
-                <div class="action-recommendation-title">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                    <line x1="12" y1="9" x2="12" y2="13"/>
-                    <line x1="12" y1="17" x2="12.01" y2="17"/>
-                  </svg>
-                  Recommended Next Step
+              <!-- Dedicated Section: DAMAGE ASSESSMENT & RECOMMENDED ACTION -->
+              <div class="damage-assessment-panel" id="res-damage-assessment-panel">
+                <div class="panel-section-header">
+                  <div class="section-badge-row">
+                    <span class="panel-badge-label">DAMAGE ASSESSMENT &amp; RECOMMENDED ACTION</span>
+                    <span class="disposition-pill" id="res-disposition-pill">AWAITING INSPECTION</span>
+                  </div>
+                  <h4 class="assessment-heading" id="res-assessment-heading">Surface Damage Assessment</h4>
                 </div>
-                <p class="action-recommendation-text" id="res-recommended-action">
-                  Schedule manual inspection by qualified aircraft maintenance technician.
-                </p>
+
+                <!-- Assessment Summary -->
+                <div class="assessment-summary-card" id="res-summary-card">
+                  <div class="assessment-subhead">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="16" x2="12" y2="12"/>
+                      <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    Damage Finding &amp; Evidence Evaluation
+                  </div>
+                  <p class="assessment-summary-text" id="res-assessment-summary">
+                    Inspection finding pending.
+                  </p>
+                  <div class="assessment-rationale-text" id="res-assessment-rationale"></div>
+                </div>
+
+                <!-- Ordered Recommended Next Steps -->
+                <div class="recommended-actions-card" id="res-actions-card">
+                  <div class="assessment-subhead">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="9 11 12 14 22 4"/>
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                    Recommended Next Steps (Ordered Operational Workflow)
+                  </div>
+                  <ol class="action-steps-list" id="res-action-steps-list">
+                    <!-- Populated dynamically -->
+                  </ol>
+                </div>
+
+                <!-- Applicable Maintenance References -->
+                <div class="references-card" id="res-references-card">
+                  <div class="assessment-subhead">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                    </svg>
+                    Applicable Maintenance References
+                  </div>
+                  <div class="references-content" id="res-references-content">
+                    <p class="reference-unavailable-notice">Applicable approved maintenance data is not available in this system. Obtain the current approved documentation for the aircraft and affected component before determining the repair.</p>
+                  </div>
+                </div>
+
+                <!-- Missing Information Required -->
+                <div class="missing-info-card" id="res-missing-info-card" style="display: none;">
+                  <div class="assessment-subhead warning">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                      <line x1="12" y1="9" x2="12" y2="13"/>
+                      <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    Information Required Before Repair Disposition
+                  </div>
+                  <ul class="missing-info-list" id="res-missing-info-list">
+                  </ul>
+                </div>
+
+                <div class="limitations-banner" id="res-limitations-banner">
+                  <strong>SAFETY DIRECTIVE:</strong> Image classification alone cannot determine allowable damage limits, crack length limits, or authorize a repair. Physical measurements must be taken by qualified personnel using calibrated aerospace tools.
+                </div>
               </div>
 
               <!-- Inspection Report & Export Actions -->
