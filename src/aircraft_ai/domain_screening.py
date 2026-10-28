@@ -29,11 +29,13 @@ def get_clip_pipeline() -> Tuple[Any, Any]:
 
     with _CLIP_LOCK:
         if _CLIP_MODEL is None or _CLIP_PROCESSOR is None:
-            from transformers import CLIPModel, CLIPProcessor
+            from transformers.models.clip import CLIPModel, CLIPProcessor
             logger.info("Loading CLIP model from '%s'...", config.DOMAIN_SCREENING_MODEL_ID)
             _CLIP_PROCESSOR = CLIPProcessor.from_pretrained(config.DOMAIN_SCREENING_MODEL_ID)
-            _CLIP_MODEL = CLIPModel.from_pretrained(config.DOMAIN_SCREENING_MODEL_ID)
-            _CLIP_MODEL.eval()
+            clip_model: Any = CLIPModel.from_pretrained(config.DOMAIN_SCREENING_MODEL_ID)
+            if hasattr(clip_model, "eval"):
+                clip_model.eval()
+            _CLIP_MODEL = clip_model
             logger.info("CLIP model loaded successfully.")
 
     return _CLIP_PROCESSOR, _CLIP_MODEL

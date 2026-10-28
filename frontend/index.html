@@ -588,12 +588,12 @@
     </section>
 
     <!-- ====================================================================
-         PAGE 3: IMAGE CAPTIONING (MODULE B - BLIP)
+         PAGE 3: IMAGE CAPTIONING (MODULE B - BLIP) — ENHANCED
          ==================================================================== -->
     <section class="content-section" id="section-captioning">
       <div class="section-header">
-        <h2>Multimodal Vision-Language Captioning & Summarization</h2>
-        <p>Hugging Face Salesforce/blip-image-captioning-base conditioned with academic prompt prefixes.</p>
+        <h2>Multimodal Vision-Language Captioning &amp; Summarization</h2>
+        <p>HuggingFace Salesforce/blip-image-captioning-base with domain-specific aerospace prompt conditioning and beam search optimization.</p>
       </div>
 
       <div class="interactive-layout">
@@ -627,19 +627,33 @@
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 1rem;">
+          <!-- Enhanced Prompt Toggle -->
+          <div class="blip-config-row">
+            <label class="toggle-label">
+              <input type="checkbox" id="blip-enhanced-toggle" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">Enhanced Aerospace Prompts</span>
+            </label>
+            <span class="config-hint" id="blip-prompt-mode-label">Domain-specific conditioning active</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem;">
             <button class="btn btn-primary" id="btn-run-caption" disabled>
               <span class="spinner" id="caption-spinner" style="display: none;"></span>
-              Caption (Task 9)
+              ✍️ Caption (Task 9)
             </button>
             <button class="btn btn-secondary" id="btn-run-summary" disabled>
               <span class="spinner" id="summary-spinner" style="display: none;"></span>
-              Summary (Task 10)
+              📋 Summary (Task 10)
             </button>
           </div>
+          <button class="btn btn-accent btn-block" id="btn-run-describe" disabled style="margin-top: 0.5rem;">
+            <span class="spinner" id="describe-spinner" style="display: none;"></span>
+            ⚡ Describe Both (Caption + Summary)
+          </button>
         </div>
 
-        <!-- Right: BLIP Output Display -->
+        <!-- Right: BLIP Output Display — Premium Redesign -->
         <div class="card">
           <div class="panel-header">
             <h3>Generated Natural Language Telemetry</h3>
@@ -649,18 +663,80 @@
           <div class="results-viewport">
             <div class="empty-state" id="caption-empty-state">
               <div class="empty-state-icon">📝</div>
-              <p>Upload an image and trigger Caption or Summary generation.</p>
+              <p>Upload an image and trigger Caption, Summary, or Describe Both.</p>
+            </div>
+
+            <!-- AI Scanner Loading Skeleton -->
+            <div class="blip-scanner-skeleton" id="blip-scanner-skeleton" style="display: none;">
+              <div class="scanner-line"></div>
+              <div class="scanner-pulse-text">AI Model Generating Description…</div>
+              <div class="scanner-bar">
+                <div class="scanner-bar-fill"></div>
+              </div>
             </div>
 
             <div class="results-content" id="caption-results-content" style="display: none;">
-              <div class="blip-result-card">
-                <div class="blip-prompt-header">Task 9 Caption (Prompt: "This is a picture of")</div>
-                <div class="blip-generated-text" id="blip-caption-output">Generating caption...</div>
+
+              <!-- Caption Result Card -->
+              <div class="blip-result-card blip-result-card--caption" id="blip-caption-card">
+                <div class="blip-card-header">
+                  <div class="blip-prompt-header">
+                    <span class="blip-task-badge caption">CAPTION</span>
+                    Task 9 — Prompt-Conditioned Generation
+                  </div>
+                  <button class="btn-icon btn-copy" id="btn-copy-caption" title="Copy caption to clipboard" style="display: none;">
+                    <span class="copy-icon">📋</span>
+                    <span class="copy-tooltip">Copied!</span>
+                  </button>
+                </div>
+                <div class="blip-prompt-display" id="blip-caption-prompt">Prompt: loading…</div>
+                <div class="blip-generated-text blip-typewriter" id="blip-caption-output">Generating caption…</div>
+                <div class="blip-meta-chips" id="blip-caption-meta" style="display: none;">
+                  <span class="meta-chip" id="caption-meta-time">⏱ —ms</span>
+                  <span class="meta-chip" id="caption-meta-tokens">🔤 — tokens</span>
+                  <span class="meta-chip" id="caption-meta-beams">🔍 — beams</span>
+                </div>
               </div>
 
-              <div class="blip-result-card">
-                <div class="blip-prompt-header">Task 10 Summary (Prompt: "This is a detailed photo showing")</div>
-                <div class="blip-generated-text" id="blip-summary-output">Click "Summary" to condition prefix...</div>
+              <!-- Summary Result Card -->
+              <div class="blip-result-card blip-result-card--summary" id="blip-summary-card">
+                <div class="blip-card-header">
+                  <div class="blip-prompt-header">
+                    <span class="blip-task-badge summary">SUMMARY</span>
+                    Task 10 — Extended Detailed Description
+                  </div>
+                  <button class="btn-icon btn-copy" id="btn-copy-summary" title="Copy summary to clipboard" style="display: none;">
+                    <span class="copy-icon">📋</span>
+                    <span class="copy-tooltip">Copied!</span>
+                  </button>
+                </div>
+                <div class="blip-prompt-display" id="blip-summary-prompt">Prompt: loading…</div>
+                <div class="blip-generated-text blip-typewriter" id="blip-summary-output">Click "Summary" or "Describe Both" to generate…</div>
+                <div class="blip-meta-chips" id="blip-summary-meta" style="display: none;">
+                  <span class="meta-chip" id="summary-meta-time">⏱ —ms</span>
+                  <span class="meta-chip" id="summary-meta-tokens">🔤 — tokens</span>
+                  <span class="meta-chip" id="summary-meta-beams">🔍 — beams</span>
+                </div>
+              </div>
+
+              <!-- Generation Config Info -->
+              <div class="blip-generation-info" id="blip-generation-info" style="display: none;">
+                <div class="gen-info-row">
+                  <span class="gen-info-label">Model</span>
+                  <span class="gen-info-value" id="gen-info-model">—</span>
+                </div>
+                <div class="gen-info-row">
+                  <span class="gen-info-label">Device</span>
+                  <span class="gen-info-value" id="gen-info-device">—</span>
+                </div>
+                <div class="gen-info-row">
+                  <span class="gen-info-label">Prompt Mode</span>
+                  <span class="gen-info-value" id="gen-info-prompt-mode">—</span>
+                </div>
+                <div class="gen-info-row">
+                  <span class="gen-info-label">Total Time</span>
+                  <span class="gen-info-value" id="gen-info-total-time">—</span>
+                </div>
               </div>
 
               <div class="disclaimer-box" style="margin-top: 1rem;">
@@ -676,6 +752,7 @@
         </div>
       </div>
     </section>
+
 
     <!-- ====================================================================
          PAGE 4: MODEL PERFORMANCE & METRICS

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from aircraft_ai.captioning import describe_image
+from aircraft_ai.captioning import describe_image, _clean_generated_text
 from aircraft_ai.errors import CorruptImageError, InvalidTaskError
 
 
@@ -29,3 +29,48 @@ def test_corrupt_image_handling(corrupt_image_file):
     """Test describe_image raises CorruptImageError for unreadable images."""
     with pytest.raises(CorruptImageError):
         describe_image(corrupt_image_file, task="caption")
+
+
+# ─── Post-processing unit tests ─────────────────────────────────────────────
+
+
+@pytest.mark.fast
+def test_clean_generated_text_strips_prompt():
+    """Test that the prompt prefix is stripped from generated text."""
+    prompt = "This is a picture of"
+    raw = "This is a picture of a large airplane with a crack on the wing"
+    result = _clean_generated_text(raw, prompt)
+    assert not result.lower().startswith("this is a picture of")
+    assert "airplane" in result.lower()
+
+
+@pytest.mark.fast
+def test_clean_generated_text_capitalizes():
+    """Test that output is capitalized."""
+    result = _clean_generated_text("a small dent on the fuselage", "nonexistent prompt")
+    assert result[0].isupper()
+
+
+@pytest.mark.fast
+def test_clean_generated_text_adds_period():
+    """Test that output ends with punctuation."""
+    result = _clean_generated_text("a crack visible on metal surface", "nonexistent prompt")
+    assert result.endswith(".")
+
+
+@pytest.mark.fast
+def test_clean_generated_text_removes_leading_punctuation():
+    """Test that leading colon/comma artifacts after prompt stripping are removed."""
+    prompt = "This is a picture of"
+    raw = "This is a picture of: a dent on the panel"
+    result = _clean_generated_text(raw, prompt)
+    assert not result.startswith(":")
+    assert not result.startswith(",")
+
+
+@pytest.mark.fast
+def test_clean_generated_text_removes_repetition():
+    """Test that repeated consecutive phrases are collapsed."""
+    result = _clean_generated_text("a plane with a plane with damage", "")
+    # Should not contain exact duplicate phrase
+    assert result.lower().count("a plane with") == 1

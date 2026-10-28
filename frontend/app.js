@@ -880,8 +880,131 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================================
-  // Module B: Captioning & Summary (BLIP)
+  // Module B: Captioning & Summary (BLIP) — Enhanced
   // =========================================================================
+
+  // Additional DOM refs for enhanced captioning
+  const blipEnhancedToggle = document.getElementById("blip-enhanced-toggle");
+  const blipPromptModeLabel = document.getElementById("blip-prompt-mode-label");
+  const btnRunDescribe = document.getElementById("btn-run-describe");
+  const describeSpinner = document.getElementById("describe-spinner");
+  const blipScannerSkeleton = document.getElementById("blip-scanner-skeleton");
+  const blipCaptionPrompt = document.getElementById("blip-caption-prompt");
+  const blipSummaryPrompt = document.getElementById("blip-summary-prompt");
+  const blipCaptionMeta = document.getElementById("blip-caption-meta");
+  const blipSummaryMeta = document.getElementById("blip-summary-meta");
+  const blipGenerationInfo = document.getElementById("blip-generation-info");
+  const btnCopyCaption = document.getElementById("btn-copy-caption");
+  const btnCopySummary = document.getElementById("btn-copy-summary");
+
+  // Enhanced prompt toggle
+  blipEnhancedToggle?.addEventListener("change", () => {
+    if (blipPromptModeLabel) {
+      blipPromptModeLabel.textContent = blipEnhancedToggle.checked
+        ? "Domain-specific conditioning active"
+        : "Academic generic prompts active";
+    }
+  });
+
+  // Typewriter animation helper
+  function typewriterEffect(element, text, speed = 25) {
+    return new Promise((resolve) => {
+      element.textContent = "";
+      element.classList.add("typing");
+      let i = 0;
+      const interval = setInterval(() => {
+        element.textContent += text.charAt(i);
+        i++;
+        if (i >= text.length) {
+          clearInterval(interval);
+          element.classList.remove("typing");
+          resolve();
+        }
+      }, speed);
+    });
+  }
+
+  // Copy to clipboard helper
+  function setupCopyButton(btn, getTextFn) {
+    btn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const text = getTextFn();
+      if (text) {
+        navigator.clipboard.writeText(text).then(() => {
+          btn.classList.add("copied");
+          setTimeout(() => btn.classList.remove("copied"), 1800);
+        });
+      }
+    });
+  }
+
+  setupCopyButton(btnCopyCaption, () => blipCaptionOutput?.textContent);
+  setupCopyButton(btnCopySummary, () => blipSummaryOutput?.textContent);
+
+  // Show scanner skeleton
+  function showBlipScanner() {
+    if (blipScannerSkeleton) blipScannerSkeleton.style.display = "block";
+    if (captionEmptyState) captionEmptyState.style.display = "none";
+    if (captionResultsContent) captionResultsContent.style.display = "none";
+  }
+
+  // Hide scanner, show results
+  function hideBlipScanner() {
+    if (blipScannerSkeleton) blipScannerSkeleton.style.display = "none";
+    if (captionResultsContent) captionResultsContent.style.display = "block";
+  }
+
+  // Populate single result (caption or summary)
+  function populateBlipResult(data, type) {
+    const outputEl = type === "caption" ? blipCaptionOutput : blipSummaryOutput;
+    const promptEl = type === "caption" ? blipCaptionPrompt : blipSummaryPrompt;
+    const metaEl = type === "caption" ? blipCaptionMeta : blipSummaryMeta;
+    const copyBtn = type === "caption" ? btnCopyCaption : btnCopySummary;
+
+    // Show prompt used
+    if (promptEl) {
+      promptEl.textContent = `Prompt: "${data.prompt_used}"`;
+    }
+
+    // Typewriter reveal
+    const displayText = `"${data.generated_text || data.raw_generated_text}"`;
+    if (outputEl) {
+      typewriterEffect(outputEl, displayText, 20);
+    }
+
+    // Meta chips
+    if (metaEl && data.metrics) {
+      metaEl.style.display = "flex";
+      const timeEl = document.getElementById(`${type}-meta-time`);
+      const tokensEl = document.getElementById(`${type}-meta-tokens`);
+      const beamsEl = document.getElementById(`${type}-meta-beams`);
+      if (timeEl) timeEl.textContent = `⏱ ${data.metrics.generation_time_ms}ms`;
+      if (tokensEl) tokensEl.textContent = `🔤 ${data.metrics.output_token_count} tokens`;
+      if (beamsEl && data.generation_config) beamsEl.textContent = `🔍 ${data.generation_config.num_beams} beams`;
+    }
+
+    // Show copy button
+    if (copyBtn) copyBtn.style.display = "inline-flex";
+  }
+
+  // Populate generation info panel
+  function populateGenerationInfo(data) {
+    if (!blipGenerationInfo) return;
+    blipGenerationInfo.style.display = "block";
+    const modelEl = document.getElementById("gen-info-model");
+    const deviceEl = document.getElementById("gen-info-device");
+    const promptModeEl = document.getElementById("gen-info-prompt-mode");
+    const totalTimeEl = document.getElementById("gen-info-total-time");
+
+    if (modelEl) modelEl.textContent = data.model_id || "—";
+    if (deviceEl) deviceEl.textContent = (data.device || "cpu").toUpperCase();
+    if (promptModeEl) promptModeEl.textContent = data.enhanced_prompts ? "Aerospace Enhanced" : "Academic Generic";
+    if (totalTimeEl) totalTimeEl.textContent = data.total_generation_time_ms
+      ? `${data.total_generation_time_ms}ms`
+      : (data.metrics?.generation_time_ms ? `${data.metrics.generation_time_ms}ms` : "—");
+  }
+
+  // File handling
   captionDropzone?.addEventListener("click", () => {
     if (!captionPreviewContainer || captionPreviewContainer.style.display === "none") {
       captionFileInput?.click();
@@ -900,8 +1023,9 @@ document.addEventListener("DOMContentLoaded", () => {
         captionPreviewImg.src = e.target.result;
         captionPreviewContainer.style.display = "flex";
         captionDropzoneContent.style.display = "none";
-        btnRunCaption.disabled = false;
-        btnRunSummary.disabled = false;
+        if (btnRunCaption) btnRunCaption.disabled = false;
+        if (btnRunSummary) btnRunSummary.disabled = false;
+        if (btnRunDescribe) btnRunDescribe.disabled = false;
       }
     };
     reader.readAsDataURL(file);
@@ -915,10 +1039,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (captionFileInput) captionFileInput.value = "";
     if (btnRunCaption) btnRunCaption.disabled = true;
     if (btnRunSummary) btnRunSummary.disabled = true;
+    if (btnRunDescribe) btnRunDescribe.disabled = true;
     if (captionEmptyState) captionEmptyState.style.display = "block";
     if (captionResultsContent) captionResultsContent.style.display = "none";
+    if (blipScannerSkeleton) blipScannerSkeleton.style.display = "none";
   });
 
+  // Example buttons
   document.querySelectorAll(".example-buttons .example-btn[id^='btn-caption-sample']").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -934,22 +1061,26 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Caption button
   btnRunCaption?.addEventListener("click", async () => {
     if (!currentCaptionBlob) return;
     btnRunCaption.disabled = true;
     if (captionSpinner) captionSpinner.style.display = "inline-block";
-    if (captionEmptyState) captionEmptyState.style.display = "none";
-    if (captionResultsContent) captionResultsContent.style.display = "block";
+    showBlipScanner();
 
     const formData = new FormData();
     formData.append("file", currentCaptionBlob);
+    formData.append("enhanced_prompts", blipEnhancedToggle?.checked ?? true);
 
     try {
       const res = await fetch("/api/caption", { method: "POST", body: formData });
       if (!res.ok) throw new Error("Caption generation request failed");
       const data = await res.json();
-      if (blipCaptionOutput) blipCaptionOutput.textContent = `"${data.raw_generated_text}"`;
+      hideBlipScanner();
+      populateBlipResult(data, "caption");
+      populateGenerationInfo(data);
     } catch (err) {
+      hideBlipScanner();
       if (blipCaptionOutput) blipCaptionOutput.textContent = `Error: ${err.message}`;
     } finally {
       btnRunCaption.disabled = false;
@@ -957,26 +1088,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Summary button
   btnRunSummary?.addEventListener("click", async () => {
     if (!currentCaptionBlob) return;
     btnRunSummary.disabled = true;
     if (summarySpinner) summarySpinner.style.display = "inline-block";
-    if (captionEmptyState) captionEmptyState.style.display = "none";
-    if (captionResultsContent) captionResultsContent.style.display = "block";
+    showBlipScanner();
 
     const formData = new FormData();
     formData.append("file", currentCaptionBlob);
+    formData.append("enhanced_prompts", blipEnhancedToggle?.checked ?? true);
 
     try {
       const res = await fetch("/api/summary", { method: "POST", body: formData });
       if (!res.ok) throw new Error("Summary generation request failed");
       const data = await res.json();
-      if (blipSummaryOutput) blipSummaryOutput.textContent = `"${data.raw_generated_text}"`;
+      hideBlipScanner();
+      populateBlipResult(data, "summary");
+      populateGenerationInfo(data);
     } catch (err) {
+      hideBlipScanner();
       if (blipSummaryOutput) blipSummaryOutput.textContent = `Error: ${err.message}`;
     } finally {
       btnRunSummary.disabled = false;
       if (summarySpinner) summarySpinner.style.display = "none";
+    }
+  });
+
+  // Describe Both button — combined endpoint
+  btnRunDescribe?.addEventListener("click", async () => {
+    if (!currentCaptionBlob) return;
+    btnRunDescribe.disabled = true;
+    if (btnRunCaption) btnRunCaption.disabled = true;
+    if (btnRunSummary) btnRunSummary.disabled = true;
+    if (describeSpinner) describeSpinner.style.display = "inline-block";
+    showBlipScanner();
+
+    const formData = new FormData();
+    formData.append("file", currentCaptionBlob);
+    formData.append("enhanced_prompts", blipEnhancedToggle?.checked ?? true);
+
+    try {
+      const res = await fetch("/api/describe", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Full description generation failed");
+      const data = await res.json();
+      hideBlipScanner();
+
+      // Populate both results
+      populateBlipResult(data.caption, "caption");
+      populateBlipResult(data.summary, "summary");
+      populateGenerationInfo(data);
+    } catch (err) {
+      hideBlipScanner();
+      if (blipCaptionOutput) blipCaptionOutput.textContent = `Error: ${err.message}`;
+      if (blipSummaryOutput) blipSummaryOutput.textContent = `Error: ${err.message}`;
+    } finally {
+      btnRunDescribe.disabled = false;
+      if (btnRunCaption) btnRunCaption.disabled = false;
+      if (btnRunSummary) btnRunSummary.disabled = false;
+      if (describeSpinner) describeSpinner.style.display = "none";
     }
   });
 });

@@ -269,14 +269,30 @@ async def evaluate_recommendation_endpoint(payload: Dict[str, Any]) -> Dict[str,
 
 
 @app.post("/api/caption")
-async def generate_caption_endpoint(file: UploadFile = File(...)) -> Dict[str, Any]:
-    """Generate a descriptive caption for an aircraft damage image using BLIP."""
+async def generate_caption_endpoint(
+    file: UploadFile = File(...),
+    num_beams: Optional[int] = Form(None),
+    max_new_tokens: Optional[int] = Form(None),
+    enhanced_prompts: Optional[bool] = Form(True),
+) -> Dict[str, Any]:
+    """Generate a descriptive caption for an aircraft damage image using BLIP.
+
+    Optional form parameters:
+    - num_beams: Beam search width (default: config.BLIP_NUM_BEAMS=5)
+    - max_new_tokens: Max generation length (default: config.BLIP_MAX_NEW_TOKENS=75)
+    - enhanced_prompts: Use domain-specific aerospace prompts (default: true)
+    """
     file_bytes = await file.read()
     image = validate_uploaded_image(file_bytes, filename=file.filename)
 
     try:
-        result = describe_image(image, task="caption")
-        logger.info("BLIP Caption generated for '%s': %s", file.filename, result["raw_generated_text"])
+        result = describe_image(
+            image, task="caption",
+            num_beams=num_beams,
+            max_new_tokens=max_new_tokens,
+            enhanced_prompts=enhanced_prompts if enhanced_prompts is not None else True,
+        )
+        logger.info("BLIP Caption generated for '%s': %s", file.filename, result["generated_text"])
         return result
     except Exception as e:
         logger.error("Captioning failed: %s", e)
@@ -287,20 +303,75 @@ async def generate_caption_endpoint(file: UploadFile = File(...)) -> Dict[str, A
 
 
 @app.post("/api/summary")
-async def generate_summary_endpoint(file: UploadFile = File(...)) -> Dict[str, Any]:
-    """Generate a detailed summary for an aircraft damage image using BLIP."""
+async def generate_summary_endpoint(
+    file: UploadFile = File(...),
+    num_beams: Optional[int] = Form(None),
+    max_new_tokens: Optional[int] = Form(None),
+    enhanced_prompts: Optional[bool] = Form(True),
+) -> Dict[str, Any]:
+    """Generate a detailed summary for an aircraft damage image using BLIP.
+
+    Optional form parameters:
+    - num_beams: Beam search width (default: config.BLIP_NUM_BEAMS=5)
+    - max_new_tokens: Max generation length (default: config.BLIP_MAX_NEW_TOKENS=75)
+    - enhanced_prompts: Use domain-specific aerospace prompts (default: true)
+    """
     file_bytes = await file.read()
     image = validate_uploaded_image(file_bytes, filename=file.filename)
 
     try:
-        result = describe_image(image, task="summary")
-        logger.info("BLIP Summary generated for '%s': %s", file.filename, result["raw_generated_text"])
+        result = describe_image(
+            image, task="summary",
+            num_beams=num_beams,
+            max_new_tokens=max_new_tokens,
+            enhanced_prompts=enhanced_prompts if enhanced_prompts is not None else True,
+        )
+        logger.info("BLIP Summary generated for '%s': %s", file.filename, result["generated_text"])
         return result
     except Exception as e:
         logger.error("Summarization failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"BLIP summarization error: {str(e)}",
+        )
+
+
+@app.post("/api/describe")
+async def generate_full_description_endpoint(
+    file: UploadFile = File(...),
+    num_beams: Optional[int] = Form(None),
+    max_new_tokens: Optional[int] = Form(None),
+    enhanced_prompts: Optional[bool] = Form(True),
+) -> Dict[str, Any]:
+    """Generate both caption AND summary in a single request.
+
+    Returns a combined response with caption, summary, generation timing,
+    and metadata — avoiding two separate API roundtrips.
+    """
+    from aircraft_ai.captioning import describe_image_full
+
+    file_bytes = await file.read()
+    image = validate_uploaded_image(file_bytes, filename=file.filename)
+
+    try:
+        result = describe_image_full(
+            image,
+            num_beams=num_beams,
+            max_new_tokens=max_new_tokens,
+            enhanced_prompts=enhanced_prompts if enhanced_prompts is not None else True,
+        )
+        logger.info(
+            "BLIP Full description generated for '%s': caption='%s', summary='%s'",
+            file.filename,
+            result["caption"]["generated_text"],
+            result["summary"]["generated_text"],
+        )
+        return result
+    except Exception as e:
+        logger.error("Full description generation failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"BLIP description error: {str(e)}",
         )
 
 

@@ -348,7 +348,7 @@ def _determine_missing_information(
         if context.damage_length_mm is None:
             missing.append("crack_length_measurement (calibrated physical dimension)")
 
-    if not context.maintenance_reference or "UNVERIFIED" in str(context.maintenance_reference):
+    if not context.maintenance_reference or "UNVERIFIED" in context.maintenance_reference:
         missing.append("applicable_approved_maintenance_reference (current revision manufacturer SRM/AMM)")
 
     return missing
@@ -894,7 +894,7 @@ def get_damage_recommendation(
             rejection_reason=uncertainty_reason,
         )
 
-    norm_class = str(predicted_class).strip().lower()
+    norm_class = predicted_class.strip().lower()
 
     # 2. Check for unsupported classes
     if norm_class not in ("dent", "crack", "uncertain"):

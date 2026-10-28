@@ -67,6 +67,17 @@ BLIP_DEVICE = os.getenv("BLIP_DEVICE", "cpu")
 CAPTION_PROMPT = "This is a picture of"
 SUMMARY_PROMPT = "This is a detailed photo showing"
 
+# Enhanced domain-specific prompts for aerospace damage captioning
+CAPTION_PROMPT_ENHANCED = "This is an aircraft inspection photograph showing"
+SUMMARY_PROMPT_ENHANCED = "This is a detailed aerospace structural inspection photo depicting the surface condition with"
+
+# BLIP Generation Hyperparameters
+BLIP_NUM_BEAMS = int(os.getenv("BLIP_NUM_BEAMS", "5"))
+BLIP_MAX_NEW_TOKENS = int(os.getenv("BLIP_MAX_NEW_TOKENS", "75"))
+BLIP_LENGTH_PENALTY = float(os.getenv("BLIP_LENGTH_PENALTY", "1.2"))
+BLIP_REPETITION_PENALTY = float(os.getenv("BLIP_REPETITION_PENALTY", "1.5"))
+BLIP_NUM_RETURN_SEQUENCES = int(os.getenv("BLIP_NUM_RETURN_SEQUENCES", "1"))
+
 # API & Security
 API_HOST = os.getenv("API_HOST", "127.0.0.1")
 API_PORT = int(os.getenv("API_PORT", "8000"))
